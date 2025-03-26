@@ -1,0 +1,35 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dev-project", "dev-project.csproj", "{09411E7F-234E-4572-95E7-D0075B9DDFE8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "addons", "addons", "{DD87F1C5-6C62-4910-BFC3-F010E5CF2C56}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "godot-bluetooth-le", "godot-bluetooth-le", "{DDBFBB1A-4954-4DA6-B00F-8E0F49143764}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "godot-bluetooth-le", "addons\godot-bluetooth-le\src\godot-bluetooth-le.csproj", "{43604EAF-3781-4FDC-A2E7-72BF7B433B2C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		ExportDebug|Any CPU = ExportDebug|Any CPU
+		ExportRelease|Any CPU = ExportRelease|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{09411E7F-234E-4572-95E7-D0075B9DDFE8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{09411E7F-234E-4572-95E7-D0075B9DDFE8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{09411E7F-234E-4572-95E7-D0075B9DDFE8}.ExportDebug|Any CPU.ActiveCfg = ExportDebug|Any CPU
+		{09411E7F-234E-4572-95E7-D0075B9DDFE8}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
+		{09411E7F-234E-4572-95E7-D0075B9DDFE8}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
+		{09411E7F-234E-4572-95E7-D0075B9DDFE8}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+		{43604EAF-3781-4FDC-A2E7-72BF7B433B2C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43604EAF-3781-4FDC-A2E7-72BF7B433B2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43604EAF-3781-4FDC-A2E7-72BF7B433B2C}.ExportDebug|Any CPU.ActiveCfg = ExportDebug|Any CPU
+		{43604EAF-3781-4FDC-A2E7-72BF7B433B2C}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
+		{43604EAF-3781-4FDC-A2E7-72BF7B433B2C}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
+		{43604EAF-3781-4FDC-A2E7-72BF7B433B2C}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{DDBFBB1A-4954-4DA6-B00F-8E0F49143764} = {DD87F1C5-6C62-4910-BFC3-F010E5CF2C56}
+		{43604EAF-3781-4FDC-A2E7-72BF7B433B2C} = {DDBFBB1A-4954-4DA6-B00F-8E0F49143764}
+	EndGlobalSection
+EndGlobal

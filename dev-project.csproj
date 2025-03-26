@@ -1,0 +1,12 @@
+<Project Sdk="Godot.NET.Sdk/4.5.0-dev.1">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>devproject</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- GodotBluetoothLE has its own assembly. Exclude from compilation here to prevent double-compile. -->
+    <ProjectReference Include="addons\godot-bluetooth-le\src\godot-bluetooth-le.csproj" />
+    <Compile Remove="addons\godot-bluetooth-le\src\**\*" />
+  </ItemGroup>
+</Project>
