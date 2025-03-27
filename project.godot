@@ -11,8 +11,13 @@ config_version=5
 [application]
 
 config/name="dev-project"
+run/main_scene="uid://b6susiwmhfcjj"
 config/features=PackedStringArray("4.5", "C#", "GL Compatibility")
 config/icon="res://icon.svg"
+
+[autoload]
+
+Bluetooth="*res://addons/godot-bluetooth-le/src/Bluetooth.cs"
 
 [dotnet]
 

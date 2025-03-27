@@ -39,6 +39,7 @@ namespace Plugin.BLE
     {
       Device device = null;
       var addr = await e.Device.GetAddressAsync();
+      Trace.Message($"Bluetooth: Found device: ({addr})");
       Guid id = AddressToGuid(addr);
       // If the device is already known, get it from the dict.
       if (e.IsStateChange)
@@ -115,6 +116,11 @@ namespace Plugin.BLE
     {
       return Task.Run(async () =>
       {
+        if (scanFilterOptions == null)
+        {
+          scanFilterOptions = new ScanFilterOptions();
+        }
+
         var nativeFilterOptions = new Dictionary<string, object>();
 
         // Build Bluez filter options. See https://web.git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc/org.bluez.Adapter.rst

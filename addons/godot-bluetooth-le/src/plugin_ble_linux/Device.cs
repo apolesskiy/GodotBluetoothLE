@@ -63,11 +63,11 @@ namespace Plugin.BLE
     // Update properties from native device in response to e.g. a state change.
     public async Task UpdateInfo()
     {
-      Name = await NativeDevice.GetNameAsync();
-      Rssi = await NativeDevice.GetRSSIAsync();
-      var connected = await NativeDevice.GetConnectedAsync();
-      _paired = await NativeDevice.GetPairedAsync();
-      var blocked = await NativeDevice.GetBlockedAsync();
+      var props = await NativeDevice.GetAllAsync();
+      Name = props.Name;
+      Rssi = props.RSSI;
+      var connected = props.Connected;
+      _paired = props.Paired;
 
       if (!connected)
       {

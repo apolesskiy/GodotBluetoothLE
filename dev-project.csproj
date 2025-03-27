@@ -5,8 +5,12 @@
     <RootNamespace>devproject</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <!-- GodotBluetoothLE has its own assembly. Exclude from compilation here to prevent double-compile. -->
-    <ProjectReference Include="addons\godot-bluetooth-le\src\godot-bluetooth-le.csproj" />
-    <Compile Remove="addons\godot-bluetooth-le\src\**\*" />
+    <!-- Use Linux.Bluetooth for Linux targets. -->
+    <PackageReference Include="Linux.Bluetooth" Version="5.67.1" Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
+    <!-- Also compile the Linux glue layer only for Linux targets. -->
+    <Compile Remove="linux\**\*" Condition="!$([MSBuild]::IsOSPlatform('Linux'))" />
+
+    <!-- For all other platforms, use Plugin.BLE as is. Plugin.BLE's compilation deals with platform selection. -->
+    <PackageReference Include="Plugin.BLE" Version="3.0.0"/>
   </ItemGroup>
 </Project>

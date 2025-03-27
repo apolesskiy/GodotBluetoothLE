@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3 uid="uid://b6susiwmhfcjj"]
+
+[ext_resource type="Script" uid="uid://jg142wsmd0uk" path="res://dev.gd" id="1_fkxo1"]
+[ext_resource type="Script" uid="uid://cvifelvo7iy2w" path="res://spinnybox.gd" id="2_fkxo1"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_daqws"]
+
+[node name="devmain" type="Node2D"]
+script = ExtResource("1_fkxo1")
+
+[node name="HangDetector" type="MeshInstance2D" parent="."]
+position = Vector2(316, 140)
+scale = Vector2(62.5, 53.5)
+mesh = SubResource("BoxMesh_daqws")
+script = ExtResource("2_fkxo1")
