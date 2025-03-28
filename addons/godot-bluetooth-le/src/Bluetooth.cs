@@ -4,8 +4,10 @@ using Plugin.BLE.Abstractions.Contracts;
 using Plugin.BLE;
 using System.Threading.Tasks;
 using Plugin.BLE.Abstractions.EventArgs;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
-namespace GodotBluetooth;
+namespace GodotBLE;
 
 /// <summary>
 /// Singleton node that provides access to the Bluetooth Low Energy (BLE) API.
@@ -21,8 +23,6 @@ public partial class Bluetooth : Node
 
   private static Bluetooth _instance;
 
-  private static IAdapter _adapter;
-
   public static Bluetooth Instance
   {
     get
@@ -30,6 +30,20 @@ public partial class Bluetooth : Node
       return _instance;
     }
   }
+
+
+  private static IAdapter _adapter;
+
+  // Intentionally non-public.
+  internal static IAdapter Adapter
+  {
+    get
+    {
+      return _adapter;
+    }
+  }
+
+  private ConcurrentDictionary<Guid, BluetoothDevice> _devices = new ConcurrentDictionary<Guid, BluetoothDevice>();
 
   private IBluetoothLE _ble;
 
@@ -58,13 +72,13 @@ public partial class Bluetooth : Node
   /// Emitted when BLE device discovery is started.
   /// </summary>
   [Signal]
-  public delegate void DiscoveryStartedEventHandler();
+  public delegate void ScanStartedEventHandler();
 
   /// <summary>
   /// Emitted when BLE device discovery is stopped.
   /// </summary>
   [Signal]
-  public delegate void DiscoveryStoppedEventHandler();
+  public delegate void ScanStoppedEventHandler();
 
 
   public override void _EnterTree()
@@ -113,89 +127,72 @@ public partial class Bluetooth : Node
 
   private void OnDeviceDiscovered(object sender, DeviceEventArgs e)
   {
-    GD.Print(e.Device.Name);
-  }
+    BluetoothDevice device = _devices.TryGetValue(e.Device.Id, out BluetoothDevice d) ? d : null;
+    if (device == null)
+    {
+      device = new BluetoothDevice(this, _adapter, e.Device);
+      _devices.TryAdd(e.Device.Id, device);
+    }
 
-
-  private void OnDeviceConnectionLost(object sender, DeviceErrorEventArgs e)
-  {
-    throw new NotImplementedException();
-  }
-
-
-  private void OnDeviceConnectionError(object sender, DeviceErrorEventArgs e)
-  {
-    throw new NotImplementedException();
-  }
-
-
-  private void OnDeviceDisconnected(object sender, DeviceEventArgs e)
-  {
-    throw new NotImplementedException();
+    SignalForwarder.ToMainThreadAsync(() => {
+      EmitSignal(SignalName.DeviceDetected, device);
+    }, "Bluetooth device detected");
   }
 
 
   private void OnDeviceConnected(object sender, DeviceEventArgs e)
   {
-    throw new NotImplementedException();
-  }
-
-
-  /// <summary>
-  /// Start scanning for BLE devices, asynchronously.
-  /// Found devices will emit the DeviceDetected signal.
-  /// Only one scan can be active at a time. Calling this when already scanning
-  /// will print an error and do nothing.
-  /// </summary>
-  public void StartDiscovery()
-  {
-    if (_adapter == null)
+    var device = _devices.TryGetValue(e.Device.Id, out BluetoothDevice d) ? d : null;
+    if (device == null)
     {
-      GD.PrintErr("Bluetooth: Cannot start discovery: adapter not initialized.");
+      GD.PrintErr("Bluetooth: Got connection event for unknown device.");
       return;
     }
-
-    EmitSignal(SignalName.DiscoveryStarted);
-    new Task(async () => 
-    {
-      await _adapter.StartScanningForDevicesAsync();
-      SignalForwarder.ToMainThreadAsync(() => {
-        EmitSignal(nameof(SignalName.DiscoveryStopped));
-      }, "Bluetooth discovery stop");
-    }).Start();
+    SignalForwarder.ToMainThreadAsync(() => {
+      device.EmitSignal(BluetoothDevice.SignalName.Connected);
+    }, "Bluetooth device connected");
   }
 
 
-  // TODO: Add C# StartDiscovery-with-filter.
-
-
-  /// <summary>
-  /// Start scanning for BLE devices, recording only devices that return true
-  /// for the given filter function. The filter function will be called asynchronously
-  /// in an IO-bound context! It is recommended to thoroughly insulate it from the main game loop.
-  /// </summary>
-  /// <param name="deviceFilter"></param>
-  public void StartDiscovery(Callable deviceFilter)
+  private void OnDeviceConnectionLost(object sender, DeviceErrorEventArgs e)
   {
-    // TODO: Godot glue here to wrap a device.
-    throw new NotImplementedException();
-  }
-
-
-  /// <summary>
-  /// Stop scanning for BLE devices. This is asynchronous and idempotent (calling this when not scanning does nothing).
-  /// </summary>
-  public void StopDiscovery()
-  {
-    if (_adapter == null)
+    var device = _devices.TryGetValue(e.Device.Id, out BluetoothDevice d) ? d : null;
+    if (device == null)
     {
-      GD.PrintErr("Bluetooth: Cannot stop discovery: adapter not initialized.");
+      GD.PrintErr("Bluetooth: Got connection lost event for unknown device.");
       return;
     }
+    SignalForwarder.ToMainThreadAsync(() => {
+      device.EmitSignal(BluetoothDevice.SignalName.Disconnected, BluetoothDevice.DisconnectReasonConnectionLost());
+    }, "Bluetooth device connection lost");
+  }
 
-    new Task(async () => {
-      await _adapter.StopScanningForDevicesAsync();
-    }).Start();
+
+  private void OnDeviceConnectionError(object sender, DeviceErrorEventArgs e)
+  {
+    var device = _devices.TryGetValue(e.Device.Id, out BluetoothDevice d) ? d : null;
+    if (device == null)
+    {
+      GD.PrintErr("Bluetooth: Got connection error event for unknown device.");
+      return;
+    }
+    SignalForwarder.ToMainThreadAsync(() => {
+      device.EmitSignal(BluetoothDevice.SignalName.Disconnected, BluetoothDevice.DisconnectReasonError());
+    }, "Bluetooth device connection error");
+  }
+
+
+  private void OnDeviceDisconnected(object sender, DeviceEventArgs e)
+  {
+    var device = _devices.TryGetValue(e.Device.Id, out BluetoothDevice d) ? d : null;
+    if (device == null)
+    {
+      GD.PrintErr("Bluetooth: Got disconnection event for unknown device.");
+      return;
+    }
+    SignalForwarder.ToMainThreadAsync(() => {
+      device.EmitSignal(BluetoothDevice.SignalName.Disconnected, BluetoothDevice.DisconnectReasonDisconnected());
+    }, "Bluetooth device disconnected");
   }
 
 
@@ -222,4 +219,62 @@ public partial class Bluetooth : Node
       }, "Bluetooth state change");
     }
   }
+
+  /// <summary>
+  /// Start scanning for BLE devices, asynchronously.
+  /// Found devices will emit the DeviceDetected signal.
+  /// Only one scan can be active at a time. Calling this when already scanning
+  /// will print an error and do nothing.
+  /// </summary>
+  public void StartScan()
+  {
+    if (_adapter == null)
+    {
+      GD.PrintErr("Bluetooth: Cannot start discovery: adapter not initialized.");
+      return;
+    }
+
+    EmitSignal(SignalName.ScanStarted);
+    new Task(async () => 
+    {
+      await _adapter.StartScanningForDevicesAsync();
+      SignalForwarder.ToMainThreadAsync(() => {
+        EmitSignal(nameof(SignalName.ScanStopped));
+      }, "Bluetooth discovery stop");
+    }).Start();
+  }
+
+
+  // TODO: Add C# StartDiscovery-with-filter.
+
+
+  /// <summary>
+  /// Start scanning for BLE devices, recording only devices that return true
+  /// for the given filter function. The filter function will be called asynchronously
+  /// in an IO-bound context! It is recommended to thoroughly insulate it from the main game loop.
+  /// </summary>
+  /// <param name="deviceFilter"></param>
+  public void StartScan(Callable deviceFilter)
+  {
+    // TODO: Godot glue here to wrap a device.
+    throw new NotImplementedException();
+  }
+
+
+  /// <summary>
+  /// Stop scanning for BLE devices. This is asynchronous and idempotent (calling this when not scanning does nothing).
+  /// </summary>
+  public void StopScan()
+  {
+    if (_adapter == null)
+    {
+      GD.PrintErr("Bluetooth: Cannot stop discovery: adapter not initialized.");
+      return;
+    }
+
+    new Task(async () => {
+      await _adapter.StopScanningForDevicesAsync();
+    }).Start();
+  }
+
 }

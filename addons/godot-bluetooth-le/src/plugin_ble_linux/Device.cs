@@ -30,9 +30,14 @@ namespace Plugin.BLE
 
     public Device(Adapter adp, Guid id, Linux.Bluetooth.Device nativeDevice) : base(adp, nativeDevice)
     {
-      adp = _adp;
+      _adp = adp;
       Id = id;
       IsConnectable = true;
+      NativeDevice = nativeDevice;
+    }
+
+    public void InitEventsAsync()
+    {
       NativeDevice.Connected += OnConnected;
       NativeDevice.Disconnected += OnDisconnected;
     }
@@ -48,13 +53,13 @@ namespace Plugin.BLE
     public async Task OnConnected(object sender, EventArgs e)
     {
       _state = DeviceState.Connected;
-      _adp.HandleConnectedDevice(this);
+      _adp.OnDeviceConnected(this);
     }
 
     public async Task OnDisconnected(object sender, EventArgs e)
     {
       _state = DeviceState.Disconnected;
-      _adp.HandleDisconnectedDevice(_disconnecting, this);
+      _adp.OnDeviceDisconnected(_disconnecting, this);
       _disconnecting = false;
     }
 #pragma warning restore 1998
@@ -81,6 +86,7 @@ namespace Plugin.BLE
 
     public async Task ConnectAsync()
     {
+      Trace.Message("Bluetooth: Attempting connection to device " + Id);
       _disconnecting = false;
       _state = DeviceState.Connecting;
       await NativeDevice.ConnectAsync();
@@ -88,6 +94,7 @@ namespace Plugin.BLE
 
     public async Task DisconnectAsync()
     {
+      Trace.Message("Bluetooth: Attempting disconnect from device " + Id);
       _disconnecting = true;
       await NativeDevice.DisconnectAsync();
     }
@@ -116,7 +123,6 @@ namespace Plugin.BLE
     {
         throw new NotImplementedException();
     }
-
 
     protected override Task<int> RequestMtuNativeAsync(int requestValue)
     {

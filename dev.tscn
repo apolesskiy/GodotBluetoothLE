@@ -13,3 +13,7 @@ position = Vector2(316, 140)
 scale = Vector2(62.5, 53.5)
 mesh = SubResource("BoxMesh_daqws")
 script = ExtResource("2_fkxo1")
+
+[node name="DeviceList" type="VBoxContainer" parent="."]
+offset_right = 40.0
+offset_bottom = 40.0

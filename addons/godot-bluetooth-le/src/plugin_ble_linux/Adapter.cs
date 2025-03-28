@@ -37,25 +37,31 @@ namespace Plugin.BLE
 
     private async Task OnDeviceFoundAsync(Linux.Bluetooth.Adapter sender, Linux.Bluetooth.DeviceFoundEventArgs e)
     {
-      Device device = null;
       var addr = await e.Device.GetAddressAsync();
-      Trace.Message($"Bluetooth: Found device: ({addr})");
       Guid id = AddressToGuid(addr);
       // If the device is already known, get it from the dict.
-      if (e.IsStateChange)
-      {
-        device = DiscoveredDevicesRegistry[id] as Device;
-      }
-      else
+      Device device = DiscoveredDevicesRegistry.TryGetValue(id, out IDevice d) ? d as Device : null;
+      if (device == null)
       {
         device = new Device(this, id, e.Device);
       }
-      
       await device.UpdateInfo();
-      if (!e.IsStateChange)
-    {
+      
+      // On reading their code, this actually handles any advertising, not just new devices.
       HandleDiscoveredDevice(device);
+      device.InitEventsAsync();
     }
+
+    public void OnDeviceConnected(Device device)
+    {
+      ConnectedDeviceRegistry.TryAdd(device.Id.ToString(), device);
+      HandleConnectedDevice(device);
+    }
+
+    public void OnDeviceDisconnected(bool clean, Device device)
+    {
+      ConnectedDeviceRegistry.Remove(device.Id.ToString(), out _);
+      HandleDisconnectedDevice(clean, device);
     }
 
     public override Task BondAsync(IDevice device)
@@ -84,7 +90,7 @@ namespace Plugin.BLE
       {
         HandleConnectionFail(dev, "connect failure - unknown reason.");
       }
-      return dev; 
+      return dev;
     }
 
     public override IReadOnlyList<IDevice> GetKnownDevicesByIds(Guid[] ids)
@@ -94,17 +100,19 @@ namespace Plugin.BLE
 
     public override IReadOnlyList<IDevice> GetSystemConnectedOrPairedDevices(Guid[] services = null)
     {
-      return DiscoveredDevices.Where((dev) => dev.State == DeviceState.Connected).ToList();
+      return ConnectedDevices.Where((dev) => dev.State == DeviceState.Connected).ToList();
     }
 
     protected override Task ConnectToDeviceNativeAsync(IDevice device, ConnectParameters connectParameters, CancellationToken cancellationToken)
     {
-      return (device.NativeDevice as Device).ConnectAsync();
+      // If we are scanning, stop scan. Otherwise, this will block until the scan is done.
+      StopScanNative();
+      return (device as Device).ConnectAsync();
     }
 
     protected override void DisconnectDeviceNative(IDevice device)
     {
-      (device.NativeDevice as Device).DisconnectAsync().Wait();
+      (device as Device).DisconnectAsync().Wait();
     }
 
     protected override IReadOnlyList<IDevice> GetBondedDevices()
@@ -161,7 +169,7 @@ namespace Plugin.BLE
 
         await _adapter.SetDiscoveryFilterAsync(nativeFilterOptions);
 
-        Trace.Message("Bluetooth: Starting scan. Filters: ");
+        Trace.Message("Bluetooth: Starting scan. " + ((nativeFilterOptions.Count > 0) ? "Filters: " : ""));
         foreach (var key in nativeFilterOptions.Keys)
         {
           Trace.Message($"Bluetooth:   > {key}: {nativeFilterOptions[key]}");
@@ -174,9 +182,11 @@ namespace Plugin.BLE
 
     protected override void StopScanNative()
     {
-      Trace.Message("Bluetooth: Stopping scan... ");
-      _adapter.StopDiscoveryAsync().Wait();
-      Trace.Message("Bluetooth: Stopped scan.");
+      if (_adapter.GetDiscoveringAsync().Result)
+      {
+        _adapter.StopDiscoveryAsync().Wait();
+        Trace.Message("Bluetooth: Stopped scan.");
+      }
     }
   }
 }

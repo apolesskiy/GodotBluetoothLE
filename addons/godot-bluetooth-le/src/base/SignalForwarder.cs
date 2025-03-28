@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace GodotBluetooth;
+namespace GodotBLE;
 
 /// <summary>
 /// The SignalForwarder forwards Actions (primarily Godot signals) to the main thread.
