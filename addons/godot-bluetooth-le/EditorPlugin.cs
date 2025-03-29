@@ -7,7 +7,7 @@ public partial class EditorPlugin : Godot.EditorPlugin
 {
   public override void _EnterTree()
   {
-    GD.Print("yay");
+    GD.Print("hooray ⋂^.⩀.^⋂");
     // Initialization of the plugin goes here.
     // Check if the GodotBluetoothLE assembly is loaded. If it's not, remind the user to edit their .csproj.
     

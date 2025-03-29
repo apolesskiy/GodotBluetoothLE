@@ -249,20 +249,20 @@ public partial class BluetoothDevice : RefCounted
   }
 
   /// <summary>
-  /// Get the list of services on this device.
+  /// Get the list of services on this device as a Godot array. GDScript users should call this method.
   /// </summary>
-  public List<BLEGattHandle> GetServiceHandles()
+  public Godot.Collections.Array<BLEGattHandle> GetServicesArray()
   {
-    return _services.Keys.Select(s => s.ToGodotHandle()).ToList();
+    return new Godot.Collections.Array<BLEGattHandle>(_services.Keys.Select(s => s.ToGodotHandle()));
   }
 
 
   /// <summary>
-  /// Get the list of services on this device with the given UUID.
+  /// Get the list of services on this device with the given UUID as a Godot array. GDScript users should call this method.
   /// </summary>
-  public List<BLEGattHandle> GetServiceHandlesByUUID(string uuid)
+  public Godot.Collections.Array<BLEGattHandle> GetServicesArrayByUUID(string uuid)
   {
-    return _services.Keys.Where(s => s.UUID == uuid).Select(s => s.ToGodotHandle()).ToList();
+    return new Godot.Collections.Array<BLEGattHandle>(_services.Keys.Where(s => s.UUID == uuid).Select(s => s.ToGodotHandle()).ToList());
   }
 
   /// <summary>
@@ -274,11 +274,11 @@ public partial class BluetoothDevice : RefCounted
   }
 
   /// <summary>
-  /// Get the characteristics of a service.
+  /// Get the characteristics of a service as a Godot array.
   /// </summary>
-  public List<BLEGattHandle> GetCharacteristicsForService(BLEGattHandle handle)
+  public Godot.Collections.Array<BLEGattHandle> GetCharacteristicsArray(BLEGattHandle handle)
   {
-    return GetCharacteristics(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex)).Select(c => c.ToGodotHandle()).ToList();
+    return new Godot.Collections.Array<BLEGattHandle>(GetCharacteristics(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex)).Select(c => c.ToGodotHandle()).ToList());
   }
 
   /// <summary>
@@ -294,9 +294,31 @@ public partial class BluetoothDevice : RefCounted
   /// <summary>
   /// Get the descriptors of a characteristic.
   /// </summary>
-  public List<String> GetDescriptorsForCharacteristic(BLEGattHandle handle)
+  public Godot.Collections.Array<BLEGattHandle> GetDescriptorsArray(BLEGattHandle handle)
   {
-    return GetDescriptors(new GattCharacteristicHandle(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex), handle.CharacteristicUUID, handle.CharacteristicIndex)).Select(d => d.UUID).ToList();
+    return new Godot.Collections.Array<BLEGattHandle>(GetDescriptors(new GattCharacteristicHandle(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex), handle.CharacteristicUUID, handle.CharacteristicIndex)).Select(d => d.ToGodotHandle()).ToList());
+  }
+
+  /// <summary>
+  /// Get the properties of a characteristic.
+  /// This is a set of flags.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <returns></returns>
+  /// <exception cref="ArgumentException"></exception>
+  public int GetCharacteristicProperties(GattCharacteristicHandle handle)
+  {
+    if (!_characteristics.ContainsKey(handle))
+    {
+      throw new ArgumentException("Characteristic not found.");
+    }
+    var characteristic = _characteristics[handle];
+    return (int)characteristic.Properties;
+  }
+
+  public int GetCharacteristicProperties(BLEGattHandle handle)
+  {
+    return GetCharacteristicProperties(new GattCharacteristicHandle(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex), handle.CharacteristicUUID, handle.CharacteristicIndex));
   }
 
   /// <summary>

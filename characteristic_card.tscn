@@ -1,0 +1,46 @@
+[gd_scene load_steps=2 format=3 uid="uid://chikhbivxuuv3"]
+
+[ext_resource type="Script" uid="uid://im17o7lxhydf" path="res://characteristic_card.gd" id="1_x6x8k"]
+
+[node name="CharacteristicCard" type="PanelContainer" node_paths=PackedStringArray("uuid_label", "props_label", "value_box", "read_button", "write_button", "notify_button")]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_x6x8k")
+uuid_label = NodePath("VBoxContainer/UUIDLabel")
+props_label = NodePath("VBoxContainer/PropsLabel")
+value_box = NodePath("VBoxContainer/ValueBox")
+read_button = NodePath("VBoxContainer/ReadButton")
+write_button = NodePath("VBoxContainer/WriteButton")
+notify_button = NodePath("VBoxContainer/NotifyButton")
+
+[node name="VBoxContainer" type="HBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="UUIDLabel" type="Label" parent="VBoxContainer"]
+custom_minimum_size = Vector2(350, 0)
+layout_mode = 2
+
+[node name="PropsLabel" type="Label" parent="VBoxContainer"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+
+[node name="ValueBox" type="LineEdit" parent="VBoxContainer"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+
+[node name="WriteButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Write
+"
+
+[node name="ReadButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Read
+"
+
+[node name="NotifyButton" type="CheckButton" parent="VBoxContainer"]
+layout_mode = 2
+text = "Notify"
