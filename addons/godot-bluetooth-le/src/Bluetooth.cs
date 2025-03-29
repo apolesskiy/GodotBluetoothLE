@@ -140,7 +140,7 @@ public partial class Bluetooth : Node
   }
 
 
-  private void OnDeviceConnected(object sender, DeviceEventArgs e)
+  private async void OnDeviceConnected(object sender, DeviceEventArgs e)
   {
     var device = _devices.TryGetValue(e.Device.Id, out BluetoothDevice d) ? d : null;
     if (device == null)
@@ -148,6 +148,7 @@ public partial class Bluetooth : Node
       GD.PrintErr("Bluetooth: Got connection event for unknown device.");
       return;
     }
+    await device.BuildGattCache();
     SignalForwarder.ToMainThreadAsync(() => {
       device.EmitSignal(BluetoothDevice.SignalName.Connected);
     }, "Bluetooth device connected");
@@ -277,4 +278,13 @@ public partial class Bluetooth : Node
     }).Start();
   }
 
+  public bool IsScanning()
+  {
+    if (_adapter == null)
+    {
+      GD.PrintErr("Bluetooth: Cannot check discovery state: adapter not initialized.");
+      return false;
+    }
+    return _adapter.IsScanning;
+  }
 }

@@ -5,8 +5,10 @@
 
 [sub_resource type="BoxMesh" id="BoxMesh_daqws"]
 
-[node name="devmain" type="Node2D"]
+[node name="devmain" type="Node2D" node_paths=PackedStringArray("device_list", "scan_button")]
 script = ExtResource("1_fkxo1")
+device_list = NodePath("VBoxContainer/DeviceList")
+scan_button = NodePath("VBoxContainer/PanelContainer/ScanButton")
 
 [node name="HangDetector" type="MeshInstance2D" parent="."]
 position = Vector2(316, 140)
@@ -14,6 +16,16 @@ scale = Vector2(62.5, 53.5)
 mesh = SubResource("BoxMesh_daqws")
 script = ExtResource("2_fkxo1")
 
-[node name="DeviceList" type="VBoxContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
 offset_right = 40.0
 offset_bottom = 40.0
+
+[node name="PanelContainer" type="PanelContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="ScanButton" type="Button" parent="VBoxContainer/PanelContainer"]
+layout_mode = 2
+text = "Scan"
+
+[node name="DeviceList" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2

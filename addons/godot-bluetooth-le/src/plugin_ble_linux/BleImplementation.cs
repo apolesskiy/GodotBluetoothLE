@@ -84,7 +84,7 @@ namespace Plugin.BLE
       }
 
       Trace.Message($"Bluetooth found adapter {_adapter.GetNameAsync().Result}.");
-      // Oh no a synchronous method is being called asynchronously, what a disaster! Surely this needs an underline!
+      
 #pragma warning disable 1998
       _adapter.PoweredOn += async (sender, e) => State = BluetoothState.On;
       _adapter.PoweredOff += async (sender, e) => State = BluetoothState.Off;

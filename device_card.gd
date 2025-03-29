@@ -41,6 +41,7 @@ func try_disconnect():
 func on_connected():
   connect_button.disabled = false
   connect_button.text = "Disconnect"
-func on_disconnected(reason):
+
+func on_disconnected(_reason):
   connect_button.disabled = false
   connect_button.text = "Connect"

@@ -1,6 +1,7 @@
 using System;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
@@ -13,6 +14,9 @@ namespace Plugin.BLE
 {
   public class Device : DeviceBase<Linux.Bluetooth.Device>
   {
+
+    private static TimeSpan _connectTimeout = TimeSpan.FromSeconds(10);
+    private static TimeSpan _resolveServicesTimeout = TimeSpan.FromSeconds(10);
 
     private Adapter _adp;
 
@@ -39,6 +43,7 @@ namespace Plugin.BLE
     public void InitEventsAsync()
     {
       NativeDevice.Connected += OnConnected;
+      NativeDevice.ServicesResolved += OnServicesResolved;
       NativeDevice.Disconnected += OnDisconnected;
     }
 
@@ -46,11 +51,19 @@ namespace Plugin.BLE
     {
       base.Dispose();
       NativeDevice.Connected -= OnConnected;
+      NativeDevice.ServicesResolved -= OnServicesResolved;
       NativeDevice.Disconnected -= OnDisconnected;
     }
 
 #pragma warning disable 1998
     public async Task OnConnected(object sender, EventArgs e)
+    {
+      _state = DeviceState.Connected;
+      Trace.Message("Bluetooth: Device " + Id + " connected, resolving services.");
+    }
+
+
+    public async Task OnServicesResolved(object sender, EventArgs e)
     {
       _state = DeviceState.Connected;
       _adp.OnDeviceConnected(this);
@@ -65,7 +78,7 @@ namespace Plugin.BLE
 #pragma warning restore 1998
 
 
-    // Update properties from native device in response to e.g. a state change.
+    // Update properties from native device in response to a state change.
     public async Task UpdateInfo()
     {
       var props = await NativeDevice.GetAllAsync();
@@ -90,6 +103,16 @@ namespace Plugin.BLE
       _disconnecting = false;
       _state = DeviceState.Connecting;
       await NativeDevice.ConnectAsync();
+      try {
+        await NativeDevice.WaitForPropertyValueAsync("Connected", true, _connectTimeout);
+        await NativeDevice.WaitForPropertyValueAsync("ServicesResolved", true, _resolveServicesTimeout);
+      }
+      catch (TimeoutException)
+      {
+        Trace.Message("Bluetooth: Connection timeout for device " + Id);
+        _state = DeviceState.Disconnected;
+        _adp.OnDeviceDisconnected(false, this);
+      }
     }
 
     public async Task DisconnectAsync()
@@ -115,13 +138,27 @@ namespace Plugin.BLE
 
     protected override Task<IService> GetServiceNativeAsync(Guid id)
     {
-        Trace.Message("Warning: Calling GetServiceNativeAsync - only the first instance of a service will be returned!");
-        throw new NotImplementedException();
+      // From the upstream repo: "Currently not being used anywhere." 
+      // https://github.com/dotnet-bluetooth-le/dotnet-bluetooth-le/blob/c9261fc147a65553092df2c5b52c4542035c5dca/Source/Plugin.BLE/Shared/DeviceBase.cs#L171
+      throw new NotImplementedException();
     }
 
     protected override Task<IReadOnlyList<IService>> GetServicesNativeAsync()
     {
-        throw new NotImplementedException();
+      return _GetServicesNativeAsync();
+    }
+
+    private async Task<IReadOnlyList<IService>> _GetServicesNativeAsync()
+    {
+      var nativeServices = await NativeDevice.GetServicesAsync();
+      var services = new List<IService>(nativeServices.Count);
+      foreach (var nativeService in nativeServices)
+      {
+        var service = new Service(this, nativeService);
+        await service.init();
+        services.Add(service);
+      }
+      return services;
     }
 
     protected override Task<int> RequestMtuNativeAsync(int requestValue)
