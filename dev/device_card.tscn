@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://cnw8uvxbgiwjy"]
 
-[ext_resource type="Script" uid="uid://b1lkivlxunq7y" path="res://device_card.gd" id="1_x6c0a"]
-[ext_resource type="Script" uid="uid://csg2ftuh8krns" path="res://expando_button.gd" id="2_rfrls"]
+[ext_resource type="Script" uid="uid://b1lkivlxunq7y" path="res://dev/device_card.gd" id="1_x6c0a"]
+[ext_resource type="Script" uid="uid://csg2ftuh8krns" path="res://dev/expando_button.gd" id="2_rfrls"]
 
 [node name="PanelContainer" type="PanelContainer" node_paths=PackedStringArray("address_label", "name_label", "connect_button", "expando_button", "expando", "services_container")]
 anchors_preset = 15

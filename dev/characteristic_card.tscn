@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://chikhbivxuuv3"]
 
-[ext_resource type="Script" uid="uid://im17o7lxhydf" path="res://characteristic_card.gd" id="1_x6x8k"]
+[ext_resource type="Script" uid="uid://im17o7lxhydf" path="res://dev/characteristic_card.gd" id="1_x6x8k"]
 
 [node name="CharacteristicCard" type="PanelContainer" node_paths=PackedStringArray("uuid_label", "props_label", "value_box", "read_button", "write_button", "notify_button")]
 anchors_preset = 15

@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://b6susiwmhfcjj"]
 
-[ext_resource type="Script" uid="uid://jg142wsmd0uk" path="res://dev.gd" id="1_fkxo1"]
-[ext_resource type="Script" uid="uid://cvifelvo7iy2w" path="res://spinnybox.gd" id="2_fkxo1"]
+[ext_resource type="Script" uid="uid://jg142wsmd0uk" path="res://dev/dev.gd" id="1_fkxo1"]
+[ext_resource type="Script" uid="uid://cvifelvo7iy2w" path="res://dev/spinnybox.gd" id="2_fkxo1"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_daqws"]
 

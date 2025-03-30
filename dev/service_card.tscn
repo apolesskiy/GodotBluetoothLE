@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://bfrbbrcffrw6"]
 
-[ext_resource type="Script" uid="uid://csg2ftuh8krns" path="res://expando_button.gd" id="1_0oqn4"]
-[ext_resource type="Script" uid="uid://djt0ebn75lobi" path="res://service_card.gd" id="1_4ot8m"]
+[ext_resource type="Script" uid="uid://csg2ftuh8krns" path="res://dev/expando_button.gd" id="1_0oqn4"]
+[ext_resource type="Script" uid="uid://djt0ebn75lobi" path="res://dev/service_card.gd" id="1_4ot8m"]
 
 [node name="ServiceCard" type="PanelContainer" node_paths=PackedStringArray("uuid_label", "index_label", "characteristics_container")]
 anchors_preset = 15

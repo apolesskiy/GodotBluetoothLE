@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Plugin.BLE.Abstractions.EventArgs;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 namespace GodotBLE;
 
@@ -220,6 +221,30 @@ public partial class Bluetooth : Node
       }, "Bluetooth state change");
     }
   }
+
+
+  public IReadOnlyCollection<BluetoothDevice> GetDevices()
+  {
+    if (_adapter == null)
+    {
+      GD.PrintErr("Bluetooth: Cannot get devices: adapter not initialized.");
+      return new List<BluetoothDevice>();
+    }
+
+    return (IReadOnlyCollection<BluetoothDevice>)_devices.Values;
+  }
+
+  public Godot.Collections.Array<BluetoothDevice> GetDevicesArray()
+  {
+    if (_adapter == null)
+    {
+      GD.PrintErr("Bluetooth: Cannot get devices: adapter not initialized.");
+      return new Godot.Collections.Array<BluetoothDevice>();
+    }
+
+    return new Godot.Collections.Array<BluetoothDevice>(_devices.Values);
+  }
+
 
   /// <summary>
   /// Start scanning for BLE devices, asynchronously.
