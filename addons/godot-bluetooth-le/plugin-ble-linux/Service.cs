@@ -10,7 +10,6 @@ namespace Plugin.BLE
 {
   public class Service : ServiceBase<Linux.Bluetooth.IGattService1>
   {
-    private bool _inited = false;
 
     private Guid _guid;
 
@@ -27,7 +26,6 @@ namespace Plugin.BLE
       var properties = await NativeService.GetAllAsync();
       _guid = Guid.Parse(properties.UUID);
       _primary = properties.Primary;
-      _inited = true;
     }
 
     protected override async Task<IList<ICharacteristic>> GetCharacteristicsNativeAsync()

@@ -2,10 +2,11 @@
   <PropertyGroup>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>devproject</RootNamespace>
+    <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Set target frameworks so Plugin.BLE pulls in the right platform-specific implementation. -->
-    <TargetFramework Condition="'$(GodotTargetPlatform)' == 'linux'">net8.0</TargetFramework>
+    <TargetFramework Condition="'$(GodotTargetPlatform)' == 'linuxbsd'">net8.0</TargetFramework>
     <TargetFramework Condition="'$(GodotTargetPlatform)' == 'windows'">net8.0-windows10.0.22000</TargetFramework>
     <TargetFramework Condition="'$(GodotTargetPlatform)' == 'ios'">net8.0-ios</TargetFramework>
     <TargetFramework Condition="'$(GodotTargetPlatform)' == 'mac'">net8.0-maccatalyst</TargetFramework>
@@ -14,5 +15,18 @@
   <ItemGroup>
     <ProjectReference Include="addons\godot-bluetooth-le\godot-bluetooth-le.csproj" />
     <Compile Remove="addons\godot-bluetooth-le\plugin-ble-linux\*" />
+  </ItemGroup>
+  <Target Name="ShowTarget" BeforeTargets="CoreCompile">
+    <Message Text="TargetFramework: $(TargetFramework)" Importance="high" />
+    <Message Text="GodotTargetPlatform: $(GodotTargetPlatform)" Importance="high" />
+  </Target>
+
+  <!-- The below aren't needed in a game project, they're here so these libs get picked up by intellisense -->
+  <ItemGroup Condition="'$(GodotTargetPlatform)' == 'linuxbsd'">
+    <!-- Use Linux.Bluetooth for Linux targets. -->
+    <PackageReference Include="Linux.Bluetooth" Version="5.67.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Plugin.BLE" Version="3.1.0" />
   </ItemGroup>
 </Project>

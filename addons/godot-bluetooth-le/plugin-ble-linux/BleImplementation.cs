@@ -14,7 +14,6 @@ namespace Plugin.BLE
   public class BleImplementation : BleImplementationBase
   {
     private Linux.Bluetooth.Adapter _adapter;
-    bool isInitialized = false;
 
     public BleImplementation()
     {
@@ -44,31 +43,43 @@ namespace Plugin.BLE
       return BluetoothState.Off;
     }
 
-    protected override void InitializeNative()
+
+    private async Task<IReadOnlyCollection<Linux.Bluetooth.Adapter>> GetAdaptersAsync()
     {
       // Fetch adapter list from bluez
       IReadOnlyCollection<Linux.Bluetooth.Adapter> nativeAdapters = null;
       try
       {
-        nativeAdapters = BlueZManager.GetAdaptersAsync().Result;
+        nativeAdapters = await BlueZManager.GetAdaptersAsync().ConfigureAwait(false);
       }
       catch (Tmds.DBus.ConnectException conEx)
       {
         Trace.Message($"Failed to get bluetooth adapter. DBus connection unavailable.\n{conEx}");
-        return;
+        return null;
       }
       catch (Tmds.DBus.DBusException dbusEx)
       {
         Trace.Message($"Failed to get bluetooth adapter. DBus error.\n{dbusEx}");
-        return;
+        return null;
       }
       catch (Exception ex)
       {
         Trace.Message($"Failed to get bluetooth adapter. Unexpected exception. \n{ex}");
-        return;
+        return null;
       }
 
-      if (nativeAdapters.Count == 0)
+      return nativeAdapters;
+    }
+
+    protected override void InitializeNative()
+    {
+      // Fetch adapter list from bluez
+      IReadOnlyCollection<Linux.Bluetooth.Adapter> nativeAdapters = null;
+      nativeAdapters = GetAdaptersAsync().Result;
+
+      Trace.Message($"Found {nativeAdapters?.Count} bluetooth adapter(s).");
+
+      if (nativeAdapters == null || nativeAdapters.Count == 0)
       {
         Trace.Message("Failed to get bluetooth adapter. No Bluetooth LE adapters Found.");
         return;
@@ -84,7 +95,7 @@ namespace Plugin.BLE
       }
 
       Trace.Message($"Bluetooth found adapter {_adapter.GetNameAsync().Result}.");
-      
+
 #pragma warning disable 1998
       _adapter.PoweredOn += async (sender, e) => State = BluetoothState.On;
       _adapter.PoweredOff += async (sender, e) => State = BluetoothState.Off;
@@ -92,8 +103,11 @@ namespace Plugin.BLE
 
 
       State = _adapter.GetPoweredAsync().Result ? BluetoothState.On : BluetoothState.Off;
+    }
 
-      isInitialized = true;
+    public override Task<bool> TrySetStateAsync(bool on)
+    {
+      throw new NotImplementedException("TrySetStateAsync is not implemented for Linux at this time.");
     }
   }
 }

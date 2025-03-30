@@ -22,7 +22,6 @@ namespace Plugin.BLE
 
     DeviceState _state;
     bool _paired;
-    bool _blocked;
     bool _disconnecting;
 
 
@@ -167,6 +166,11 @@ namespace Plugin.BLE
     }
 
     protected override bool UpdateConnectionIntervalNative(ConnectionInterval interval)
+    {
+      return false;
+    }
+
+    public override bool UpdateConnectionParameters(ConnectParameters connectParameters = default)
     {
       return false;
     }

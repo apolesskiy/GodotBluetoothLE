@@ -21,6 +21,8 @@ namespace GodotBLE;
 public partial class Bluetooth : Node
 {
 
+  private static TimeSpan BLE_TIMEOUT = TimeSpan.FromSeconds(10);
+
   private static Bluetooth _instance;
 
   public static Bluetooth Instance
@@ -102,8 +104,10 @@ public partial class Bluetooth : Node
     _ble = bleImpl;
     _ble.StateChanged += OnBleStateChanged;
 
-    bleImpl.Initialize();
-
+    new Task(() => 
+    {
+      bleImpl.Initialize();
+    }).Start();
   }
 
 

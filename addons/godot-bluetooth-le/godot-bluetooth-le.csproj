@@ -5,16 +5,16 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>GodotBLE</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'linux'">net8.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'linuxbsd'">net8.0</TargetFrameworks>
     <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'windows'">net8.0-windows10.0.22000</TargetFrameworks>
     <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'ios'">net8.0-ios</TargetFrameworks>
     <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'mac'">net8.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'android'">net8.0-android34.0</TargetFrameworks>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(GodotTargetPlatform)' == 'linux'">
+  <ItemGroup Condition="'$(GodotTargetPlatform)' == 'linuxbsd'">
     <!-- Use the linux plugin for linux projects. -->
-    <ProjectReference Include="addons\godot-bluetooth-le\plugin-ble-linux\plugin-ble-linux.csproj" />
+    <ProjectReference Include="plugin-ble-linux\plugin-ble-linux.csproj" />
   </ItemGroup>
 
   <ItemGroup> 
