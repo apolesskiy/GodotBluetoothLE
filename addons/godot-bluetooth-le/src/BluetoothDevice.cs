@@ -164,6 +164,9 @@ public partial class BluetoothDevice : RefCounted
   private ConcurrentDictionary<GattServiceHandle, IService> _services = new ConcurrentDictionary<GattServiceHandle, IService>();
   private ConcurrentDictionary<GattCharacteristicHandle, ICharacteristic> _characteristics = new ConcurrentDictionary<GattCharacteristicHandle, ICharacteristic>();
   private ConcurrentDictionary<GattDescriptorHandle, IDescriptor> _descriptors = new ConcurrentDictionary<GattDescriptorHandle, IDescriptor>();
+  
+  // Observers use descriptor handles, but can observe descriptors or characteristics.
+  private ConcurrentDictionary<GattDescriptorHandle, GattObserver> _observers = new ConcurrentDictionary<GattDescriptorHandle, GattObserver>();
 
   public BluetoothDevice(Bluetooth bt, IAdapter adp, IDevice device)
   {
@@ -175,13 +178,18 @@ public partial class BluetoothDevice : RefCounted
 
   /// <summary>
   /// Emitted when device connection is established.
+  /// 
+  /// Notifications must be configured every time this signal is emitted.
+  /// 
+  /// Note that depending on device, this may change the list of available services.
+  /// In these cases, it is recommended that any BLEGattHandles be reacquired and
+  /// subscriptions reinitialized.
   /// </summary>
   [Signal]
   public delegate void ConnectedEventHandler();
 
   /// <summary>
   /// Emitted when device is disconnected or connection is lost.
-  /// When this is emitted, listeners should invalidated any cached service references.
   /// </summary>
   [Signal]
   public delegate void DisconnectedEventHandler(string reason);
@@ -278,7 +286,7 @@ public partial class BluetoothDevice : RefCounted
   /// </summary>
   public Godot.Collections.Array<BLEGattHandle> GetCharacteristicsArray(BLEGattHandle handle)
   {
-    return new Godot.Collections.Array<BLEGattHandle>(GetCharacteristics(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex)).Select(c => c.ToGodotHandle()).ToList());
+    return new Godot.Collections.Array<BLEGattHandle>(GetCharacteristics(handle.GetServiceHandle()).Select(c => c.ToGodotHandle()).ToList());
   }
 
   /// <summary>
@@ -296,7 +304,7 @@ public partial class BluetoothDevice : RefCounted
   /// </summary>
   public Godot.Collections.Array<BLEGattHandle> GetDescriptorsArray(BLEGattHandle handle)
   {
-    return new Godot.Collections.Array<BLEGattHandle>(GetDescriptors(new GattCharacteristicHandle(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex), handle.CharacteristicUUID, handle.CharacteristicIndex)).Select(d => d.ToGodotHandle()).ToList());
+    return new Godot.Collections.Array<BLEGattHandle>(GetDescriptors(handle.GetCharacteristicHandle()).Select(d => d.ToGodotHandle()).ToList());
   }
 
   /// <summary>
@@ -318,11 +326,12 @@ public partial class BluetoothDevice : RefCounted
 
   public int GetCharacteristicProperties(BLEGattHandle handle)
   {
-    return GetCharacteristicProperties(new GattCharacteristicHandle(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex), handle.CharacteristicUUID, handle.CharacteristicIndex));
+    return GetCharacteristicProperties(handle.GetCharacteristicHandle());
   }
 
   /// <summary>
   /// Write to a characteristic if it supports writing. The write itself will be done asynchronously.
+  /// Writes do not update the cached value, because characteristiscs may have WRITE, but not READ.
   /// </summary>
   /// <param name="handle"></param>
   /// <param name="data"></param>
@@ -330,7 +339,8 @@ public partial class BluetoothDevice : RefCounted
   {
     if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
     {
-      throw new InvalidOperationException("Device not connected.");
+      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
+      return;
     }
     if (!_characteristics.ContainsKey(handle))
     {
@@ -341,17 +351,98 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support writing.");
     }
-    characteristic.WriteAsync(data).Start();
+    new Task(() =>
+    {
+      characteristic.WriteAsync(data).Wait();
+
+    }).Start();
   }
 
+
+  /// <summary>
+  /// Write to a characteristic if it supports writing. The write itself will be done asynchronously.
+  /// Writes do not update the cached value, because characteristiscs may have WRITE, but not READ.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <param name="data"></param>
   public void StartWrite(BLEGattHandle handle, byte[] data)
   {
-    StartWrite(new GattCharacteristicHandle(new GattServiceHandle(handle.ServiceUUID, handle.ServiceIndex), handle.CharacteristicUUID, handle.CharacteristicIndex), data);
+    if (!handle.IsCharacteristic())
+    {
+      throw new ArgumentException("Handle is not a characteristic.");
+    }
+    StartWrite(handle.GetCharacteristicHandle(), data);
   }
+
+
+  /// <summary>
+  /// Start a read operation on a characteristic or descriptor.
+  /// This will be done asynchronously in a separate thread.
+  /// To retrieve the value, subscribe to the ValueChanged signal for this handle,
+  /// and call GetValue() when the read is complete.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <exception cref="ArgumentException"></exception>
+  public void StartRead(BLEGattHandle handle)
+  {
+    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
+    {
+      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
+      return;
+    }
+    if (handle.IsCharacteristic())
+    {
+      new Task(() =>
+      {
+        ReadCharacteristicAsync(handle.GetCharacteristicHandle()).Wait();
+      }).Start();
+      return;
+    }
+
+    if (handle.IsDescriptor())
+    {
+      new Task(() =>
+      {
+        ReadDescriptorAsync(handle.GetDescriptorHandle()).Wait();
+      }).Start();
+      return;
+    }
+    throw new ArgumentException("Handle is neither a characteristic nor a descriptor.");
+  }
+
+
+  /// <summary>
+  /// Get the cached value of a characteristic or descriptor.
+  /// This is the value that was last read or received via notification.
+  /// This method does not perform a read operation.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <returns></returns>
+  /// <exception cref="InvalidOperationException"></exception>
+  /// <exception cref="ArgumentException"></exception>
+  public byte[] GetValue(BLEGattHandle handle)
+  {
+    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
+    {
+      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected. Returned value may be invalid.");
+    }
+    if (!_characteristics.ContainsKey(handle.GetCharacteristicHandle()) &&
+        !_descriptors.ContainsKey(handle.GetDescriptorHandle()))
+    {
+      throw new ArgumentException("Handle not found.");
+    }
+    if (handle.IsCharacteristic())
+    {
+      return _characteristics[handle.GetCharacteristicHandle()].Value;
+    }
+    return _descriptors[handle.GetDescriptorHandle()].Value;
+  }
+
 
   /// <summary>
   /// Read a characteristic asynchronously.
   /// The method returns when the read is complete.
+  /// Upon completion, this method will also update the cached value and notify observers.
   /// </summary>
   public async Task<byte[]> ReadCharacteristicAsync(GattCharacteristicHandle handle)
   {
@@ -368,13 +459,18 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support reading.");
     }
-    var result = await characteristic.ReadAsync();
+    GD.Print($"Read characteristic {handle.UUID}");
+    var result = await characteristic.ReadAsync().ConfigureAwait(false);
+    GD.Print($"Post Read characteristic {handle.UUID}");
+    NotifyValueChanged(new GattDescriptorHandle(handle, string.Empty, 0));
     return result.Item1;
   }
+
 
   /// <summary>
   /// Read a descriptor asynchronously.
   /// The method returns when the read is complete.
+  /// Upon completion, this method will also update the cached value and notify observers.
   /// </summary>
   public async Task<byte[]> ReadDescriptorAsync(GattDescriptorHandle handle)
   {
@@ -387,9 +483,77 @@ public partial class BluetoothDevice : RefCounted
       throw new ArgumentException("Descriptor not found.");
     }
     var descriptor = _descriptors[handle];
-    var result = await descriptor.ReadAsync();
+    var result = await descriptor.ReadAsync().ConfigureAwait(false);
+    NotifyValueChanged(handle);
     return result;
   }
+
+
+  /// <summary>
+  /// Notify that a value has changed, only if there is an observer for it.
+  /// </summary>
+  /// <param name="handle"></param>
+  private void NotifyValueChanged(GattDescriptorHandle handle)
+  {
+    if (_observers.ContainsKey(handle))
+    {
+      var observer = _observers[handle];
+
+      // Send async and main thread signals.
+      observer.ValueChangedAsync?.Invoke();
+      SignalForwarder.ToMainThreadAsync(() =>
+      {
+        observer.EmitSignal(GattObserver.SignalName.ValueChanged);
+      }, "Bluetooth device value changed");
+    }
+  }
+
+
+  /// <summary>
+  /// Returns a GattObserver object. Its ValueChanged signal will fire any time the target characteristic or descriptor value is updated.
+  /// This object is valid for the lifetime of the BluetoothDevice, including between connections.
+  /// 
+  /// Example: device.Observe(myCharacteristic).ValueChanged.connect(value_changed)
+  /// </summary>
+  public GattObserver GetSubscription(BLEGattHandle handle)
+  {
+    if (handle.IsCharacteristic())
+    {
+      return GetSubscription(handle.GetCharacteristicHandle());
+    }
+    else if (handle.IsDescriptor())
+    {
+      return GetSubscription(handle.GetDescriptorHandle());
+    }
+    throw new ArgumentException("Handle is neither a characteristic nor a descriptor.");
+  }
+
+  /// <summary>
+  /// Returns a GattObserver object. Its ValueChanged signal will fire any time the target characteristic or descriptor value is updated.
+  /// This object is valid for the lifetime of the BluetoothDevice, including between connections.
+  /// </summary>
+  public GattObserver GetSubscription(GattCharacteristicHandle handle)
+  {
+    return GetSubscription(new GattDescriptorHandle(handle, string.Empty, 0));
+  }
+
+
+  /// <summary>
+  /// Returns a GattObserver object. Its ValueChanged signal will fire any time the target characteristic or descriptor value is updated.
+  /// This object is valid for the lifetime of the BluetoothDevice, including between connections.
+  /// </summary>
+  /// <param name="handle"></param>
+  public GattObserver GetSubscription(GattDescriptorHandle handle)
+  {
+    if (_observers.ContainsKey(handle))
+    {
+      return _observers[handle];
+    }
+    var observer = new GattObserver();
+    _observers[handle] = observer;
+    return observer;
+  }
+
 
   /// <summary>
   /// Enable notifications on a given characteristic if it supports them. This will be done asynchronously in a separate thread.
@@ -410,7 +574,25 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support notifications.");
     }
-    characteristic.StartUpdatesAsync().Start();
+    _ = characteristic.StartUpdatesAsync();
+  }
+
+
+  /// <summary>
+  /// Start notifications on a given characteristic if it supports them. This will be done asynchronously in a separate thread.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <exception cref="ArgumentException"></exception>
+  public void StartNotify(BLEGattHandle handle)
+  {
+    if (handle.IsCharacteristic())
+    {
+      StartNotify(handle.GetCharacteristicHandle());
+    }
+    else
+    {
+      throw new ArgumentException("Handle is not a characteristic.");
+    }
   }
 
 
@@ -433,22 +615,26 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support notifications.");
     }
-    characteristic.StopUpdatesAsync().Start();
+    _ = characteristic.StopUpdatesAsync();
   }
 
 
   /// <summary>
-  /// Returns a GattObserver object. Its ValueChanged signal will fire any time the target characteristic or descriptor value is updated.
-  /// This object is valid for the lifetime of the BluetoothDevice, including between connections.
-  /// 
-  /// Example: device.Observe(myCharacteristic).ValueChanged.connect(value_changed)
+  /// Stop notifications on a given characteristic. This will be done asynchronously in a separate thread.
   /// </summary>
-  public GattObserver Observe(BLEGattHandle handle)
+  /// <param name="handle"></param>
+  /// <exception cref="ArgumentException"></exception>
+  public void StopNotify(BLEGattHandle handle)
   {
-    throw new NotImplementedException("GattObserver not implemented yet.");
+    if (handle.IsCharacteristic())
+    {
+      StopNotify(handle.GetCharacteristicHandle());
+    }
+    else
+    {
+      throw new ArgumentException("Handle is not a characteristic.");
+    }
   }
-
-
 
 
   /// <summary>
@@ -460,6 +646,7 @@ public partial class BluetoothDevice : RefCounted
   /// </summary>
   public async Task BuildGattCache()
   {
+    GD.Print("Building GATT cache for device " + _address);
     if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
     {
       return;
@@ -500,6 +687,12 @@ public partial class BluetoothDevice : RefCounted
         }
         var charHandle = new GattCharacteristicHandle(serviceHandle, characteristic.Id.ToString(), charCount[characteristic.Id]);
         _characteristics[charHandle] = characteristic;
+        var obsHandle = new GattDescriptorHandle(charHandle, string.Empty, 0);
+        // Characteristics only, register for updates. This only applies to notifies and is handled by the backing implementation.
+        characteristic.ValueUpdated += (sender, args) =>
+        {
+          NotifyValueChanged(obsHandle);
+        };
         var descriptors = await characteristic.GetDescriptorsAsync();
         descCount.Clear();
         foreach (var descriptor in descriptors)

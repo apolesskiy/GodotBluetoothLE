@@ -16,24 +16,67 @@ static func make(dev : BluetoothDevice, h : BLEGattHandle):
   var card = scene.instantiate()
   card.device = dev
   card.handle = h
-  card.uuid_label.text = h.CharacteristicUUID
-  var char_props = dev.GetCharacteristicProperties(h)
-  card.props_label.text = str(h.CharacteristicIndex)
+
+  return card
+
+
+func _ready():
+  uuid_label.text = handle.CharacteristicUUID
+  var char_props = device.GetCharacteristicProperties(handle)
+  props_label.text = str(handle.CharacteristicIndex)
 
   if char_props & BluetoothConstants.CHARACTERISTIC_PROPERTY_READ:
-    card.read_button.disabled = false
+    read_button.disabled = false
   else:
-    card.read_button.disabled = true
+    read_button.disabled = true
 
   if char_props & (BluetoothConstants.CHARACTERISTIC_PROPERTY_WRITE | 
                    BluetoothConstants.CHARACTERISTIC_PROPERTY_WRITE_NO_RESPONSE):
-    card.write_button.disabled = false
+    write_button.disabled = false
   else:
-    card.write_button.disabled = true
+    write_button.disabled = true
 
   if char_props & BluetoothConstants.CHARACTERISTIC_PROPERTY_NOTIFY:
-    card.notify_button.disabled = false
+    notify_button.disabled = false
   else:
-    card.notify_button.disabled = true
+    notify_button.disabled = true
 
-  return card
+  read_button.pressed.connect(_on_read_button_pressed)
+  write_button.pressed.connect(_on_write_button_pressed)
+  notify_button.pressed.connect(_on_notify_toggle)
+
+  device.Connected.connect(_on_device_connected)
+  if device.State == BluetoothDevice.StateConnected():
+    _on_device_connected()
+
+
+func _on_device_connected():
+  # Subscribe to the backing characteristic.
+  var sub = device.GetSubscription(handle)
+  if not sub.ValueChanged.is_connected(on_value_updated):
+    sub.ValueChanged.connect(on_value_updated)
+
+
+func on_value_updated():
+  # Update the value box with the new value.
+  var value = device.GetValue(handle)
+  print("Updating value to ", value)
+  if value:
+    value_box.text = value.get_string_from_utf8()
+
+
+func _on_read_button_pressed():
+  device.StartRead(handle)
+
+
+func _on_write_button_pressed():
+  var value = value_box.text
+  var bytes = value.to_utf8_buffer()
+  device.StartWrite(handle, bytes)
+
+
+func _on_notify_toggle():
+  if notify_button.button_pressed:
+    device.StartNotify(handle)
+  else:
+    device.StopNotify(handle)

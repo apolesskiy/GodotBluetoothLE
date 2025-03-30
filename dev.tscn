@@ -11,7 +11,7 @@ device_list = NodePath("VBoxContainer/DeviceList")
 scan_button = NodePath("VBoxContainer/PanelContainer/ScanButton")
 
 [node name="HangDetector" type="MeshInstance2D" parent="."]
-position = Vector2(316, 140)
+position = Vector2(781, 205)
 scale = Vector2(62.5, 53.5)
 mesh = SubResource("BoxMesh_daqws")
 script = ExtResource("2_fkxo1")

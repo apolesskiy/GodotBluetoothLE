@@ -53,7 +53,7 @@ namespace Plugin.BLE
       {
         throw new InvalidOperationException("Descriptor not initialized. Call Init() before writing.");
       }
-      await NativeDescriptor.WriteValueAsync(data, null);
+      await NativeDescriptor.WriteValueAsync(data, null).ConfigureAwait(false);
     }
   }
 }

@@ -55,6 +55,7 @@ func on_disconnected(_reason):
   connect_button.text = "Connect"
   expando_button.button_pressed = false
   expando_button.disabled = true
+  expando_button.expando_target.visible = false
 
 func _on_expando_button_pressed():
   expando.visible = expando_button.button_pressed

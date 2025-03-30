@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,7 +31,7 @@ namespace Plugin.BLE
     public override event EventHandler<CharacteristicUpdatedEventArgs> ValueUpdated;
 
     public Characteristic(IService service, IGattCharacteristic1 nativeCharacteristic) : base(service, nativeCharacteristic)
-    {}
+    { }
 
     public async Task Init()
     {
@@ -38,14 +39,25 @@ namespace Plugin.BLE
       _guid = Guid.Parse(properties.UUID);
       SetCharacteristicProperties(properties.Flags);
       // Register a handler on this property and pass it back.
-      await NativeCharacteristic.WatchPropertiesAsync((propChange) =>
+      await NativeCharacteristic.WatchPropertiesAsync(async (propChange) =>
       {
         foreach (var (pname, pobj) in propChange.Changed)
         {
           if ("Value".Equals(pname))
           {
             byte[] pbytes = (byte[])pobj;
-            OnValueChanged(pbytes);
+            Trace.Message($"Characteristic value changed for {Id}, got {pbytes.Length} bytes.");
+            UpdateValue(pbytes);
+            // Only raise this event on notify, per interface contract.
+            // Important to check that the notify flag is present, Notifying property does not exist in BlueZ otherwise.
+            if (_properties.HasFlag(CharacteristicPropertyType.Notify))
+            {
+              if (await NativeCharacteristic.GetNotifyingAsync().ConfigureAwait(false))
+              {
+                Trace.Message("Characteristic notify on, invoking value updated.");
+                ValueUpdated?.Invoke(this, new CharacteristicUpdatedEventArgs(this));
+              }
+            }
           }
         }
       });
@@ -77,7 +89,7 @@ namespace Plugin.BLE
           _properties |= (CharacteristicPropertyType)value;
         }
       }
-    }  
+    }
 
 
     protected override Task<IReadOnlyList<IDescriptor>> GetDescriptorsNativeAsync()
@@ -102,40 +114,30 @@ namespace Plugin.BLE
         return;
       }
       _readValue = value;
-      ValueUpdated?.Invoke(this, new CharacteristicUpdatedEventArgs(this));
-    }
-
-
-    private void OnValueChanged(byte[] data)
-    {
-      UpdateValue(data);
     }
 
 
     protected override Task<(byte[] data, int resultCode)> ReadNativeAsync()
     {
-      return _ReadNativeAsync();
+      return Task<(byte[], int)>.Run(
+        async () =>
+        {
+          var data = await NativeCharacteristic.ReadValueAsync(new Dictionary<string, object>()).ConfigureAwait(false);
+          UpdateValue(data);
+          return (data, 0);
+        }
+      );
     }
-
-
-    private async Task<(byte[] data, int resultCode)> _ReadNativeAsync()
-    {
-      var data = await NativeCharacteristic.ReadValueAsync(null);
-      _readValue = data;
-      UpdateValue(data);
-      return (data, 0);
-    }
-
 
     protected override Task StartUpdatesNativeAsync(CancellationToken cancellationToken = default)
     {
-      return NativeCharacteristic.StartNotifyAsync();
+      return Task.Run(() => NativeCharacteristic.StartNotifyAsync().Wait(cancellationToken));
     }
 
 
     protected override Task StopUpdatesNativeAsync(CancellationToken cancellationToken = default)
     {
-      return NativeCharacteristic.StopNotifyAsync();
+      return Task.Run(() => NativeCharacteristic.StopNotifyAsync().Wait(cancellationToken));
     }
 
 
@@ -147,7 +149,9 @@ namespace Plugin.BLE
 
     private async Task<int> _WriteNativeAsync(byte[] data, CharacteristicWriteType writeType)
     {
-      await NativeCharacteristic.WriteValueAsync(data, null);
+      Trace.Message($"Start write");
+      await NativeCharacteristic.WriteValueAsync(data, new Dictionary<string, object>()).ConfigureAwait(false);
+      Trace.Message($"Write complete");
       return 0;
     }
   }
