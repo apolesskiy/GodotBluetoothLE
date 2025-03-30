@@ -153,6 +153,13 @@ public partial class BluetoothDevice : RefCounted
     }
   }
 
+  private static List<DeviceState> ConnectableStates = new List<DeviceState>
+  {
+    DeviceState.Disconnected,
+    // This is something android-specific in Plugin.BLE, we can ignore it.
+    DeviceState.Limited,
+  };
+
   private IDevice _device;
 
   private Bluetooth _bt;
@@ -219,19 +226,42 @@ public partial class BluetoothDevice : RefCounted
     }
   }
 
+  public bool CanConnect()
+  {
+    return ConnectableStates.Contains(_device.State);
+  }
+
   /// <summary>
   /// Start connecting to this device.
   /// Listen to Connected and Disconnected signals to know when the connection is established.
   /// </summary>
   public void StartConnect()
   {
-    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Disconnected)
+    if (!CanConnect())
     {
+      GD.PushWarning($"Bluetooth: Cannot connect to device {_address}, device not in a connectable state.");
+      
+      SignalForwarder.ToMainThreadAsync(() =>
+      {
+          EmitSignal(SignalName.Disconnected, snDisconnectReasonDisconnected);
+      }, "Bluetooth device connection error");
       return;
     }
+
     new Task(async () =>
     {
-      await _adp.ConnectToDeviceAsync(_device);
+      try {
+        await _adp.ConnectToDeviceAsync(_device);
+      }
+      catch (Exception e)
+      {
+        GD.PushError($"Bluetooth: Error connecting to device {_address}: {e.Message}");
+        SignalForwarder.ToMainThreadAsync(() =>
+        {
+          EmitSignal(SignalName.Disconnected, snDisconnectReasonError);
+        }, "Bluetooth device connection error");
+        return;
+      }
     }).Start();
   }
 

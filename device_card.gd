@@ -27,9 +27,10 @@ func _ready() -> void:
 
 
 func connect_button_pressed():
+  print("Connect button pressed, device state: ", device.State)
   if device.State == BluetoothDevice.StateConnected():
     try_disconnect()
-  elif device.State == BluetoothDevice.StateDisconnected():
+  elif device.CanConnect():
     try_connect()
 
 

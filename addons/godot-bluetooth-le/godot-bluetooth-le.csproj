@@ -1,0 +1,25 @@
+<Project Sdk="Godot.NET.Sdk/4.5.0-dev.1">
+  <!-- This .csproj doesn't build anything, it exists only to pull in the needed dependencies
+       to (somewhat) minimize changes needed in the toplevel .csproj. -->
+  <PropertyGroup>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>GodotBLE</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'linux'">net8.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'windows'">net8.0-windows10.0.22000</TargetFrameworks>
+    <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'ios'">net8.0-ios</TargetFrameworks>
+    <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'mac'">net8.0-maccatalyst</TargetFrameworks>
+    <TargetFrameworks Condition="'$(GodotTargetPlatform)' == 'android'">net8.0-android34.0</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GodotTargetPlatform)' == 'linux'">
+    <!-- Use the linux plugin for linux projects. -->
+    <ProjectReference Include="addons\godot-bluetooth-le\plugin-ble-linux\plugin-ble-linux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup> 
+    <PackageReference Include="Plugin.BLE" Version="3.1.0"/>
+    <!-- We don't actually compile anything here, because the Godot bits need to live in the toplevel project. -->
+    <Compile Remove="**\*" />
+  </ItemGroup>
+</Project>

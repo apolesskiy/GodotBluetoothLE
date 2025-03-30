@@ -97,17 +97,13 @@ public partial class Bluetooth : Node
 
     _instance = this;
 
-    var bleImpl = new BleImplementation();
-
-
-
-    // Start initializing the BLE stack asynchronously.
-    new Task(() => {
-      bleImpl.Initialize();
-    }).Start();
+    var bleImpl = new Plugin.BLE.BleImplementation();
 
     _ble = bleImpl;
     _ble.StateChanged += OnBleStateChanged;
+
+    bleImpl.Initialize();
+
   }
 
 
