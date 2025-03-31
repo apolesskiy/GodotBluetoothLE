@@ -1,6 +1,6 @@
 class_name ServiceCard extends PanelContainer
 
-static var scene : PackedScene = load("res://service_card.tscn")
+static var scene : PackedScene = load("res://dev/service_card.tscn")
 @export var uuid_label : Label
 @export var index_label : Label
 @export var characteristics_container : Control

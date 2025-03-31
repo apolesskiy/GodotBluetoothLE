@@ -1,6 +1,6 @@
 class_name DeviceCard extends Control
 
-static var scene : PackedScene = load("res://device_card.tscn")
+static var scene : PackedScene = load("res://dev/device_card.tscn")
 
 var device : BluetoothDevice
 

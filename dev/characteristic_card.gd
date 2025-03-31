@@ -1,6 +1,6 @@
 class_name CharacteristicCard extends Control
 
-static var scene : PackedScene = load("res://characteristic_card.tscn")
+static var scene : PackedScene = load("res://dev/characteristic_card.tscn")
 
 @export var uuid_label : Label
 @export var props_label : Label
