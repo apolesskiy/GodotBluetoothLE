@@ -72,6 +72,13 @@ public partial class Bluetooth : Node
   public delegate void DeviceDetectedEventHandler();
 
   /// <summary>
+  /// Emitted when a BLE device is connected. Listeners should
+  /// connect to the Device's Disconnected signal to know when it disconnects.
+  /// </summary>
+  [Signal]
+  public delegate void DeviceConnectedEventHandler(BluetoothDevice device);
+
+  /// <summary>
   /// Emitted when BLE device discovery is started.
   /// </summary>
   [Signal]
@@ -151,6 +158,7 @@ public partial class Bluetooth : Node
     }
     await device.BuildGattCache();
     SignalForwarder.ToMainThreadAsync(() => {
+      EmitSignal(SignalName.DeviceConnected, device);
       device.EmitSignal(BluetoothDevice.SignalName.Connected);
     }, "Bluetooth device connected");
   }
