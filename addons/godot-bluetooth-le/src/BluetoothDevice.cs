@@ -406,6 +406,49 @@ public partial class BluetoothDevice : RefCounted
 
 
   /// <summary>
+  /// Start a read operation on a characteristic.
+  /// This will be done asynchronously in a separate thread.
+  /// To retrieve the value, subscribe to the ValueChanged signal for this handle,
+  /// and call GetValue() when the read is complete.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <exception cref="ArgumentException"></exception>
+  public void StartRead(GattCharacteristicHandle handle)
+  {
+    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
+    {
+      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
+      return;
+    }
+    new Task(() =>
+    {
+      ReadCharacteristicAsync(handle).Wait();
+    }).Start();
+  }
+
+
+  /// <summary>
+  /// Start a read operation on a descriptor.
+  /// This will be done asynchronously in a separate thread.
+  /// To retrieve the value, subscribe to the ValueChanged signal for this handle,
+  /// and call GetValue() when the read is complete.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <exception cref="ArgumentException"></exception>
+  public void StartRead(GattDescriptorHandle handle)
+  {
+    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
+    {
+      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
+      return;
+    }
+    new Task(() =>
+    {
+      ReadDescriptorAsync(handle).Wait();
+    }).Start();
+  }
+
+  /// <summary>
   /// Start a read operation on a characteristic or descriptor.
   /// This will be done asynchronously in a separate thread.
   /// To retrieve the value, subscribe to the ValueChanged signal for this handle,
@@ -415,26 +458,14 @@ public partial class BluetoothDevice : RefCounted
   /// <exception cref="ArgumentException"></exception>
   public void StartRead(BLEGattHandle handle)
   {
-    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
-    {
-      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
-      return;
-    }
     if (handle.IsCharacteristic())
     {
-      new Task(() =>
-      {
-        ReadCharacteristicAsync(handle.GetCharacteristicHandle()).Wait();
-      }).Start();
+      StartRead(handle.GetCharacteristicHandle());
       return;
     }
-
     if (handle.IsDescriptor())
     {
-      new Task(() =>
-      {
-        ReadDescriptorAsync(handle.GetDescriptorHandle()).Wait();
-      }).Start();
+      StartRead(handle.GetDescriptorHandle());
       return;
     }
     throw new ArgumentException("Handle is neither a characteristic nor a descriptor.");
@@ -489,9 +520,7 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support reading.");
     }
-    GD.Print($"Read characteristic {handle.UUID}");
     var result = await characteristic.ReadAsync().ConfigureAwait(false);
-    GD.Print($"Post Read characteristic {handle.UUID}");
     NotifyValueChanged(new GattDescriptorHandle(handle, string.Empty, 0));
     return result.Item1;
   }
