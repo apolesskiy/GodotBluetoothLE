@@ -52,6 +52,16 @@ public partial class Bluetooth : Node
 
   private bool _initialized = false;
 
+  private string _state = BluetoothState.Unknown.ToString();
+
+  public string State
+  {
+    get
+    {
+      return _state;
+    }
+  }
+
   /// <summary>
   /// Emitted when the Bluetooth stack has been initialized.
   /// </summary>
@@ -111,8 +121,9 @@ public partial class Bluetooth : Node
 
     _ble = bleImpl;
     _ble.StateChanged += OnBleStateChanged;
+    _state = _ble.State.ToString();
 
-    new Task(() => 
+    new Task(() =>
     {
       bleImpl.Initialize();
     }).Start();
@@ -221,11 +232,12 @@ public partial class Bluetooth : Node
         }, "Bluetooth initialization");
       }
 
+      _state = args.NewState.ToString();
+
       SignalForwarder.ToMainThreadAsync(() => 
       {
-        var stateName = args.NewState.ToString();
-        GD.Print($"Bluetooth state changed to {stateName}");
-        EmitSignal(nameof(SignalName.BluetoothStateChanged), stateName);
+        GD.Print($"Bluetooth state changed to {_state}");
+        EmitSignal(nameof(SignalName.BluetoothStateChanged), _state);
       }, "Bluetooth state change");
     }
   }
@@ -265,6 +277,12 @@ public partial class Bluetooth : Node
     if (_adapter == null)
     {
       GD.PrintErr("Bluetooth: Cannot start discovery: adapter not initialized.");
+      return;
+    }
+    
+    if (_adapter.IsScanning)
+    {
+      GD.Print("Bluetooth: StartScan called while already scanning.");
       return;
     }
 
