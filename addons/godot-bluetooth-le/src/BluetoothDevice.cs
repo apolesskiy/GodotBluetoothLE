@@ -483,20 +483,43 @@ public partial class BluetoothDevice : RefCounted
   /// <exception cref="ArgumentException"></exception>
   public byte[] GetValue(BLEGattHandle handle)
   {
-    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
-    {
-      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected. Returned value may be invalid.");
-    }
-    if (!_characteristics.ContainsKey(handle.GetCharacteristicHandle()) &&
-        !_descriptors.ContainsKey(handle.GetDescriptorHandle()))
-    {
-      throw new ArgumentException("Handle not found.");
-    }
     if (handle.IsCharacteristic())
     {
-      return _characteristics[handle.GetCharacteristicHandle()].Value;
+      return GetValue(handle.GetCharacteristicHandle());
     }
-    return _descriptors[handle.GetDescriptorHandle()].Value;
+    if (handle.IsDescriptor())
+    {
+      return GetValue(handle.GetDescriptorHandle());
+    }
+    throw new ArgumentException("Handle is neither a characteristic nor a descriptor.");
+  }
+
+
+  public byte[] GetValue(GattCharacteristicHandle handle)
+  {
+    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
+    {
+      GD.PushWarning($"Bluetooth: Device {_address} not connected. Returned value may be invalid.");
+    }
+    if (!_characteristics.ContainsKey(handle))
+    {
+      throw new ArgumentException("Characteristic not found.");
+    }
+    return _characteristics[handle].Value;
+  }
+
+
+  public byte[] GetValue(GattDescriptorHandle handle)
+  {
+    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
+    {
+      GD.PushWarning($"Bluetooth: Device {_address} not connected. Returned value may be invalid.");
+    }
+    if (!_descriptors.ContainsKey(handle))
+    {
+      throw new ArgumentException("Descriptor not found.");
+    }
+    return _descriptors[handle].Value;
   }
 
 
