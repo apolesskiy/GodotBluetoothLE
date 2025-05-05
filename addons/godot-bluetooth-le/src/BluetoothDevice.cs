@@ -248,7 +248,7 @@ public partial class BluetoothDevice : RefCounted
       return;
     }
 
-    new Task(async () =>
+    Task.Run(async () =>
     {
       try {
         await _adp.ConnectToDeviceAsync(_device);
@@ -262,7 +262,7 @@ public partial class BluetoothDevice : RefCounted
         }, "Bluetooth device connection error");
         return;
       }
-    }).Start();
+    });
   }
 
   public void StartDisconnect()
@@ -271,10 +271,7 @@ public partial class BluetoothDevice : RefCounted
     {
       return;
     }
-    new Task(async () =>
-    {
-      await _adp.DisconnectDeviceAsync(_device);
-    }).Start();
+    Task.Run(() => _adp.DisconnectDeviceAsync(_device));
   }
 
   /// <summary>
@@ -381,11 +378,7 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support writing.");
     }
-    new Task(() =>
-    {
-      characteristic.WriteAsync(data).Wait();
-
-    }).Start();
+    Task.Run(() => characteristic.WriteAsync(data));
   }
 
 
@@ -420,10 +413,7 @@ public partial class BluetoothDevice : RefCounted
       GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
       return;
     }
-    new Task(() =>
-    {
-      ReadCharacteristicAsync(handle).Wait();
-    }).Start();
+    Task.Run(() => ReadCharacteristicAsync(handle));
   }
 
 
@@ -442,10 +432,7 @@ public partial class BluetoothDevice : RefCounted
       GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
       return;
     }
-    new Task(() =>
-    {
-      ReadDescriptorAsync(handle).Wait();
-    }).Start();
+    Task.Run(() => ReadDescriptorAsync(handle));
   }
 
   /// <summary>
@@ -543,7 +530,7 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support reading.");
     }
-    var result = await characteristic.ReadAsync().ConfigureAwait(false);
+    var result = await characteristic.ReadAsync();
     NotifyValueChanged(new GattDescriptorHandle(handle, string.Empty, 0));
     return result.Item1;
   }
@@ -565,7 +552,7 @@ public partial class BluetoothDevice : RefCounted
       throw new ArgumentException("Descriptor not found.");
     }
     var descriptor = _descriptors[handle];
-    var result = await descriptor.ReadAsync().ConfigureAwait(false);
+    var result = await descriptor.ReadAsync();
     NotifyValueChanged(handle);
     return result;
   }
