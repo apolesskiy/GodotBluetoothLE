@@ -1,13 +1,13 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
 using Godot;
 using Plugin.BLE.Abstractions;
 using Plugin.BLE.Abstractions.Contracts;
-using System.Collections.ObjectModel;
 
 namespace GodotBLE;
 
@@ -168,11 +168,14 @@ public partial class BluetoothDevice : RefCounted
 
   private string _address;
 
+  private BLEOperation _connectOp = null;
+
   private ConcurrentDictionary<GattServiceHandle, IService> _services = new ConcurrentDictionary<GattServiceHandle, IService>();
   private ConcurrentDictionary<GattCharacteristicHandle, ICharacteristic> _characteristics = new ConcurrentDictionary<GattCharacteristicHandle, ICharacteristic>();
   private ConcurrentDictionary<GattDescriptorHandle, IDescriptor> _descriptors = new ConcurrentDictionary<GattDescriptorHandle, IDescriptor>();
-  
+
   // Observers use descriptor handles, but can observe descriptors or characteristics.
+
   private ConcurrentDictionary<GattDescriptorHandle, GattObserver> _observers = new ConcurrentDictionary<GattDescriptorHandle, GattObserver>();
 
   public BluetoothDevice(Bluetooth bt, IAdapter adp, IDevice device)
@@ -235,43 +238,63 @@ public partial class BluetoothDevice : RefCounted
   /// Start connecting to this device.
   /// Listen to Connected and Disconnected signals to know when the connection is established.
   /// </summary>
-  public void StartConnect()
+  /// <returns>
+  /// Connect operation. Since only one connection attempt is possible, the same operation will
+  /// be returned if connect is called multiple times.
+  /// The operation will be completed when the connection is established or fails.
+  /// It is generally recommended to use the DeviceConnected/DeviceDisconnected signals, unless
+  /// the outcome of the specific connection attempt is important.
+  /// </returns>
+  public BLEOperation Connect()
   {
-    if (!CanConnect())
+    // We save the op instead of returning it because device connections may come from outside of this request.
+    // We need to finalize these connections in the adapter's OnDeviceConnected callback, and only complete the
+    // connect operation when that is done.
+    if (_connectOp == null || _connectOp.IsDone)
     {
-      GD.PushWarning($"Bluetooth: Cannot connect to device {_address}, device not in a connectable state.");
-      
-      SignalForwarder.ToMainThreadAsync(() =>
+      _connectOp = BLEOperation.Create(async (op) =>
       {
-          EmitSignal(SignalName.Disconnected, snDisconnectReasonDisconnected);
-      }, "Bluetooth device connection error");
-      return;
-    }
-
-    Task.Run(async () =>
-    {
-      try {
-        await _adp.ConnectToDeviceAsync(_device);
-      }
-      catch (Exception e)
-      {
-        GD.PushError($"Bluetooth: Error connecting to device {_address}: {e.Message}");
-        SignalForwarder.ToMainThreadAsync(() =>
+        try
         {
-          EmitSignal(SignalName.Disconnected, snDisconnectReasonError);
-        }, "Bluetooth device connection error");
-        return;
-      }
-    });
+          if (!CanConnect())
+          {
+            throw new InvalidOperationException($"Bluetooth: Cannot connect to device {_address}, device not in a connectable state.");
+          }
+          await _adp.ConnectToDeviceAsync(_device);
+        }
+        catch (Exception e)
+        {
+          op.Fail($"Bluetooth: Error connecting to device {_address}: {e.ToString()}");
+          return;
+        }
+      });
+    }
+    return _connectOp;
   }
 
-  public void StartDisconnect()
+  public async Task DisconnectAsync()
   {
     if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
     {
-      return;
+      throw new InvalidOperationException($"Bluetooth: Cannot disconnect from device {_address}, device not connected.");
     }
-    Task.Run(() => _adp.DisconnectDeviceAsync(_device));
+    await _adp.DisconnectDeviceAsync(_device);
+  }
+
+  public BLEOperation Disconnect()
+  {
+    return BLEOperation.Create(async (op) =>
+    {
+      try
+      {
+        await DisconnectAsync();
+        op.Succeed();
+      }
+      catch (Exception e)
+      {
+        op.Fail($"Bluetooth: Error disconnecting from device {_address}: {e.ToString()}");
+      }
+    });
   }
 
   /// <summary>
@@ -359,26 +382,30 @@ public partial class BluetoothDevice : RefCounted
   /// <summary>
   /// Write to a characteristic if it supports writing. The write itself will be done asynchronously.
   /// Writes do not update the cached value, because characteristiscs may have WRITE, but not READ.
+  /// If the characteristic is WRITE_WITH_RESPONSE, the result will contain the device's response code.
+  /// Otherwise, the result will be 0.
   /// </summary>
   /// <param name="handle"></param>
   /// <param name="data"></param>
-  public void StartWrite(GattCharacteristicHandle handle, byte[] data)
+  public async Task<int> WriteAsync(GattCharacteristicHandle handle, byte[] data)
   {
     if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
     {
-      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
-      return;
+      throw new InvalidOperationException($"Bluetooth: Cannot write to device {_address}, device not connected.");
     }
+
     if (!_characteristics.ContainsKey(handle))
     {
       throw new ArgumentException("Characteristic not found.");
     }
+
     var characteristic = _characteristics[handle];
-    if(!characteristic.CanWrite)
+    if (!characteristic.CanWrite)
     {
       throw new InvalidOperationException("Characteristic does not support writing.");
     }
-    Task.Run(() => characteristic.WriteAsync(data));
+
+    return await characteristic.WriteAsync(data);
   }
 
 
@@ -388,32 +415,81 @@ public partial class BluetoothDevice : RefCounted
   /// </summary>
   /// <param name="handle"></param>
   /// <param name="data"></param>
-  public void StartWrite(BLEGattHandle handle, byte[] data)
+  /// <returns>
+  /// BLEOperation of the write. If the characteristic is WRITE_WITH_RESPONSE, the result
+  /// contain the device's response code.
+  /// </returns>
+  public BLEOperation Write(GattCharacteristicHandle handle, byte[] data)
+  {
+    return BLEOperation.Create(async (op) =>
+    {
+      try
+      {
+        var result = await WriteAsync(handle, data);
+        op.Succeed(result);
+      }
+      catch (Exception e)
+      {
+        op.Fail($"Exception while writing characteristic {handle}: {e.ToString()}");
+      }
+    });
+  }
+
+
+  /// <summary>
+  /// Write to a characteristic if it supports writing.
+  /// Writes do not update the cached value, because characteristiscs may have WRITE, but not READ.
+  /// If the characteristic is WRITE_WITH_RESPONSE, the result will contain the device's response code.
+  /// Otherwise, the result will be 0.
+  public async Task<int> WriteAsync(BLEGattHandle handle, byte[] data)
   {
     if (!handle.IsCharacteristic())
     {
       throw new ArgumentException("Handle is not a characteristic.");
     }
-    StartWrite(handle.GetCharacteristicHandle(), data);
+    return await WriteAsync(handle.GetCharacteristicHandle(), data);
+  }
+
+
+  /// <summary>
+  /// Write to a characteristic if it supports writing. The write will be done asynchronously.
+  /// Writes do not update the cached value, because characteristiscs may have WRITE, but not READ.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <param name="data"></param>
+  public BLEOperation Write(BLEGattHandle handle, byte[] data)
+  {
+    if (!handle.IsCharacteristic())
+    {
+      throw new ArgumentException("Handle is not a characteristic.");
+    }
+    return Write(handle.GetCharacteristicHandle(), data);
   }
 
 
   /// <summary>
   /// Start a read operation on a characteristic.
   /// This will be done asynchronously in a separate thread.
-  /// To retrieve the value, subscribe to the ValueChanged signal for this handle,
-  /// and call GetValue() when the read is complete.
+  /// The result of the read will be returned as a byte array.
+  /// The ValueChanged signal will be emitted for observers of this
+  /// characteristic when the read is complete.
   /// </summary>
   /// <param name="handle"></param>
   /// <exception cref="ArgumentException"></exception>
-  public void StartRead(GattCharacteristicHandle handle)
+  public BLEOperation Read(GattCharacteristicHandle handle)
   {
-    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
+    return BLEOperation.Create(async (op) =>
     {
-      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
-      return;
-    }
-    Task.Run(() => ReadCharacteristicAsync(handle));
+      try
+      {
+        var data = await ReadCharacteristicAsync(handle);
+        op.Succeed(data);
+      }
+      catch (Exception e)
+      {
+        op.Fail($"Exception while reading characteristic {handle}: {e.Message}");
+      }
+    });
   }
 
 
@@ -425,35 +501,63 @@ public partial class BluetoothDevice : RefCounted
   /// </summary>
   /// <param name="handle"></param>
   /// <exception cref="ArgumentException"></exception>
-  public void StartRead(GattDescriptorHandle handle)
+  public BLEOperation Read(GattDescriptorHandle handle)
   {
     if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
     {
-      GD.PushWarning($"Bluetooth: Cannot write to device {_address}, device not connected.");
-      return;
+      throw new InvalidOperationException($"Bluetooth: Cannot write to device {_address}, device not connected.");
     }
-    Task.Run(() => ReadDescriptorAsync(handle));
+    return BLEOperation.Create(async (op) =>
+    {
+      try
+      {
+        var data = await ReadDescriptorAsync(handle);
+        op.Succeed(data);
+      }
+      catch (Exception e)
+      {
+        op.Fail($"Exception while reading descriptor {handle}: {e.Message}");
+      }
+    });
   }
 
   /// <summary>
   /// Start a read operation on a characteristic or descriptor.
-  /// This will be done asynchronously in a separate thread.
-  /// To retrieve the value, subscribe to the ValueChanged signal for this handle,
-  /// and call GetValue() when the read is complete.
+  /// The method returns when the read is complete.
+  /// Upon completion, this method will also update the cached value and notify observers.
   /// </summary>
   /// <param name="handle"></param>
+  /// <returns></returns>
   /// <exception cref="ArgumentException"></exception>
-  public void StartRead(BLEGattHandle handle)
+  public async Task<byte[]> ReadAsync(BLEGattHandle handle)
   {
     if (handle.IsCharacteristic())
     {
-      StartRead(handle.GetCharacteristicHandle());
-      return;
+      return await ReadCharacteristicAsync(handle.GetCharacteristicHandle());
     }
     if (handle.IsDescriptor())
     {
-      StartRead(handle.GetDescriptorHandle());
-      return;
+      return await ReadDescriptorAsync(handle.GetDescriptorHandle());
+    }
+    throw new ArgumentException("Handle is neither a characteristic nor a descriptor.");
+  }
+
+
+  /// <summary>
+  /// Start a read operation on a characteristic or descriptor.
+  /// This will be done asynchronously.
+  /// </summary>
+  /// <param name="handle"></param>
+  /// <exception cref="ArgumentException"></exception>
+  public BLEOperation Read(BLEGattHandle handle)
+  {
+    if (handle.IsCharacteristic())
+    {
+      return Read(handle.GetCharacteristicHandle());
+    }
+    if (handle.IsDescriptor())
+    {
+      return Read(handle.GetDescriptorHandle());
     }
     throw new ArgumentException("Handle is neither a characteristic nor a descriptor.");
   }
@@ -625,10 +729,9 @@ public partial class BluetoothDevice : RefCounted
 
 
   /// <summary>
-  /// Enable notifications on a given characteristic if it supports them. This will be done asynchronously in a separate thread.
+  /// Enable notifications on a given characteristic if it supports them.
   /// </summary>
-  /// <param name="handle"></param>
-  public void StartNotify(GattCharacteristicHandle handle)
+  public async Task EnableNotifyAsync(GattCharacteristicHandle handle)
   {
     if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
     {
@@ -643,33 +746,47 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support notifications.");
     }
-    _ = characteristic.StartUpdatesAsync();
+    await characteristic.StartUpdatesAsync();
   }
 
 
   /// <summary>
-  /// Start notifications on a given characteristic if it supports them. This will be done asynchronously in a separate thread.
+  /// Enable notifications on a given characteristic if it supports them. This will be done asynchronously.
+  /// </summary>
+  /// <param name="handle"></param>
+  public BLEOperation EnableNotify(GattCharacteristicHandle handle)
+  {
+    return BLEOperation.Create(async (op) =>
+    {
+      try
+      {
+        await EnableNotifyAsync(handle);
+        op.Succeed();
+      }
+      catch (Exception e)
+      {
+        op.Fail($"Exception while starting notifications on characteristic {handle}: {e.ToString()}");
+      }
+    });
+  }
+
+
+  /// <summary>
+  /// Start notifications on a given characteristic if it supports them. This will be done asynchronously.
   /// </summary>
   /// <param name="handle"></param>
   /// <exception cref="ArgumentException"></exception>
-  public void StartNotify(BLEGattHandle handle)
+  public BLEOperation EnableNotify(BLEGattHandle handle)
   {
     if (handle.IsCharacteristic())
     {
-      StartNotify(handle.GetCharacteristicHandle());
+      return EnableNotify(handle.GetCharacteristicHandle());
     }
-    else
-    {
-      throw new ArgumentException("Handle is not a characteristic.");
-    }
+    throw new ArgumentException("Handle is not a characteristic.");
   }
 
 
-  /// <summary>
-  /// Stop notifications on a given characteristic. This will be done asynchronously in a separate thread.
-  /// </summary>
-  /// <param name="handle"></param>
-  public void StopNotify(GattCharacteristicHandle handle)
+  public async Task DisableNotifyAsync(GattCharacteristicHandle handle)
   {
     if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
     {
@@ -684,42 +801,50 @@ public partial class BluetoothDevice : RefCounted
     {
       throw new InvalidOperationException("Characteristic does not support notifications.");
     }
-    _ = characteristic.StopUpdatesAsync();
+    await characteristic.StopUpdatesAsync();
   }
 
 
   /// <summary>
-  /// Stop notifications on a given characteristic. This will be done asynchronously in a separate thread.
+  /// Stop notifications on a given characteristic. This will be done asynchronously.
+  /// </summary>
+  /// <param name="handle"></param>
+  public BLEOperation DisableNotify(GattCharacteristicHandle handle)
+  {
+    return BLEOperation.Create(async (op) =>
+    {
+      try
+      {
+        await DisableNotifyAsync(handle);
+        op.Succeed();
+      }
+      catch (Exception e)
+      {
+        op.Fail($"Exception while stopping notifications on characteristic {handle}: {e.ToString()}");
+      }
+    });
+  }
+
+
+  /// <summary>
+  /// Stop notifications on a given characteristic. This will be done asynchronously.
   /// </summary>
   /// <param name="handle"></param>
   /// <exception cref="ArgumentException"></exception>
-  public void StopNotify(BLEGattHandle handle)
+  public BLEOperation DisableNotify(BLEGattHandle handle)
   {
     if (handle.IsCharacteristic())
     {
-      StopNotify(handle.GetCharacteristicHandle());
+      return DisableNotify(handle.GetCharacteristicHandle());
     }
-    else
-    {
-      throw new ArgumentException("Handle is not a characteristic.");
-    }
+
+    throw new ArgumentException("Handle is not a characteristic.");
   }
 
 
-  /// <summary>
-  /// Build a cache of the device's services and characteristics.
-  /// This is done every connection.
-  /// Handles *should* stay valid between connections, but it depends on device.
-  /// If a device changes its services between connections, handles may no longer be valid.
-  /// This is handled gracefully within this class.
-  /// </summary>
-  public async Task BuildGattCache()
+  private async Task BuildGattCache()
   {
     GD.Print("Building GATT cache for device " + _address);
-    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
-    {
-      return;
-    }
     _services.Clear();
     _characteristics.Clear();
     _descriptors.Clear();
@@ -741,7 +866,7 @@ public partial class BluetoothDevice : RefCounted
       var serviceHandle = new GattServiceHandle(service.Id.ToString(), svcCount[service.Id]);
 
       _services[serviceHandle] = service;
-      
+
       var characteristics = await service.GetCharacteristicsAsync();
       charCount.Clear();
       foreach (var characteristic in characteristics)
@@ -778,6 +903,42 @@ public partial class BluetoothDevice : RefCounted
           _descriptors[descHandle] = descriptor;
         }
       }
+    }
+  }
+
+  /// <summary>
+  /// Build a cache of the device's services and characteristics.
+  /// This is done every connection.
+  /// Handles *should* stay valid between connections, but it depends on device.
+  /// If a device changes its services between connections, handles may no longer be valid.
+  /// This is handled gracefully within this class.
+  /// </summary>
+  public async Task CompleteConnection()
+  {
+    if (_device.State != Plugin.BLE.Abstractions.DeviceState.Connected)
+    {
+      _connectOp?.Fail($"Bluetooth: Device {_address} not connected.");
+      return;
+    }
+
+    try
+    {
+      await BuildGattCache();
+
+      _connectOp?.Succeed();
+      SignalForwarder.ToMainThreadAsync(() =>
+      {
+        Bluetooth.Instance.EmitSignal(Bluetooth.SignalName.DeviceConnected, this);
+        EmitSignal(BluetoothDevice.SignalName.Connected);
+      }, "Bluetooth device connected");
+    }
+    catch (Exception e)
+    {
+      _connectOp?.Fail($"Bluetooth: Error while building GATT cache for device {_address}: {e.Message}");
+
+      // If we are here, we are in a bad state: the device is connected to the adapter, but we can't access it.
+      // Disconnect.
+      Disconnect();
     }
   }
 }

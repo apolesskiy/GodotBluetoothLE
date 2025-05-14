@@ -37,12 +37,12 @@ func connect_button_pressed():
 func try_connect():
   connect_button.disabled = true
   connect_button.text = "Connecting..."
-  device.StartConnect()
+  device.Connect().Start()
 
 func try_disconnect():
   connect_button.disabled = true
   connect_button.text = "Disconnecting..."
-  device.StartDisconnect()
+  device.Disconnect().Start()
 
 func on_connected():
   connect_button.disabled = false

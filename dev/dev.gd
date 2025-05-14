@@ -23,28 +23,40 @@ func _on_scan_button_pressed() -> void:
 
 
 func _start_scan() -> void:
-  scan_button.disabled = true
-  scan_button.text = "Starting..."
-  Bluetooth.StartScan()
+  if not Bluetooth.IsScanning():
+    scan_button.text = "Starting..."
+    var op = Bluetooth.Scan()
+    op.Error.connect(_on_can_scan)
+    op.Start()
 
 
 func _stop_scan() -> void:
   scan_button.disabled = true
   scan_button.text = "Stopping..."
-  Bluetooth.StopScan()
+  var op = Bluetooth.StopScan()
+  op.Error.connect(_on_can_stop_scan)
+  op.Start()
+
+
+func _on_can_scan() -> void:
+  scan_button.disabled = false
+  scan_button.text = "Scan"
+
+
+func _on_can_stop_scan() -> void:
+  scan_button.disabled = false
+  scan_button.text = "Stop Scan"
 
 
 func _on_scan_started() -> void:
-  scan_button.disabled = false
-  scan_button.text = "Stop Scan"
   print("Scan started")
+  _on_can_stop_scan()
 
 
 func _on_scan_stopped() -> void:
-  scan_button.disabled = false
-  scan_button.text = "Scan"
   print("Scan stopped")
-
+  _on_can_scan()
+  
 
 func on_device_detected(device) -> void:
   print("Device detected: (" + device.Address + ") " + device.Name)
