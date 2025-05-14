@@ -66,13 +66,28 @@ func on_value_updated():
 
 
 func _on_read_button_pressed():
-  device.StartRead(handle)
+  var read = device.Read(handle)
+  read.Done.connect(func (op, success):
+    if success:
+      var value = op.Result
+      print("Read bytes: ", value)
+    else:
+      print("Read error!")
+  )
+  read.Start()
 
 
 func _on_write_button_pressed():
   var value = value_box.text
   var bytes = value.to_utf8_buffer()
-  device.StartWrite(handle, bytes)
+  var write = device.Write(handle, bytes)
+  write.Done.connect(func (op, success):
+    if success:
+      print("Write response code: ", op.Result)
+    else:
+      print("Write error!")
+  )
+  write.Start()
 
 
 func _on_notify_toggle():
