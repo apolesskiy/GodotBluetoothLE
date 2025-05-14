@@ -83,7 +83,7 @@ public partial class BLEOperation : RefCounted
     }
 
     state = OperationState.RUNNING;
-    new Task(async () => await _content(this)).Start();
+    Task.Run(async () => await _content(this));
   }
 
   /// <summary>
