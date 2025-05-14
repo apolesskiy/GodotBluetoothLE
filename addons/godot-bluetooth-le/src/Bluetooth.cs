@@ -54,11 +54,6 @@ public partial class Bluetooth : Node
 
   private string _state = BluetoothState.Unknown.ToString();
 
-  /// <summary>
-  /// Current scan operation. Only one scan can be active at a time.
-  /// </summary>
-  private BLEOperation _scanOperation = null;
-
   public string State
   {
     get
@@ -266,55 +261,68 @@ public partial class Bluetooth : Node
     return new Godot.Collections.Array<BluetoothDevice>(_devices.Values);
   }
 
-
   /// <summary>
   /// Scan for BLE devices. This will instruct the adapter to start scanning for devices.
   /// Only one scan can be running at a time. If a scan is already running, this will
-  /// return the current scan operation.
+  /// throw an exception.
   /// Found devices will emit the DeviceDetected signal.
   /// </summary>
-  /// <returns>
-  /// Operation for this scan event. Since only one scan per adapter is possible,
-  /// this will return the same operation if a scan is already running.
-  /// </returns>
-  public BLEOperation Scan()
+  public async Task ScanAsync()
   {
     if (_adapter == null)
     {
       throw new InvalidOperationException("Cannot start discovery: adapter not initialized.");
     }
 
-    if (_scanOperation != null && !_scanOperation.IsDone && _adapter.IsScanning)
+    if (_adapter.IsScanning)
     {
-      return _scanOperation;
+      throw new InvalidOperationException("Cannot start discovery: already scanning.");
     }
 
-    _scanOperation = BLEOperation.Create(async (op) =>
+    SignalForwarder.ToMainThreadAsync(() =>
     {
+      EmitSignal(nameof(SignalName.ScanStarted));
+    }, "Bluetooth discovery start");
+
+    await _adapter.StartScanningForDevicesAsync().ContinueWith(t =>
+    {
+      if (t.IsFaulted)
+      {
+        throw t.Exception;
+      }
+
       SignalForwarder.ToMainThreadAsync(() =>
       {
-        EmitSignal(nameof(SignalName.ScanStarted));
-      }, "Bluetooth discovery start");
+        EmitSignal(nameof(SignalName.ScanStopped));
+      }, "Bluetooth discovery stop");
 
-      await _adapter.StartScanningForDevicesAsync().ContinueWith(t =>
+    }, TaskContinuationOptions.OnlyOnRanToCompletion);
+  }
+
+
+  /// <summary>
+  /// Scan for BLE devices. This will instruct the adapter to start scanning for devices.
+  /// Only one scan can be running at a time. If a scan is already running, the operation
+  /// will fail.
+  /// Found devices will emit the DeviceDetected signal.
+  /// </summary>
+  /// <returns>
+  /// Operation for this scan invocation.
+  /// </returns>
+  public BLEOperation Scan()
+  {
+    return BLEOperation.Create(async (op) =>
+    {
+      try
       {
-        if (t.IsFaulted)
-        {
-          GD.PushError($"Bluetooth: Error starting discovery: {t.Exception}");
-          op.Fail(t.Exception.ToString());
-          return;
-        }
-
+        await ScanAsync();
         op.Succeed();
-        SignalForwarder.ToMainThreadAsync(() =>
-        {
-          EmitSignal(nameof(SignalName.ScanStopped));
-        }, "Bluetooth discovery stop");
-
-      }, TaskContinuationOptions.OnlyOnRanToCompletion);
+      }
+      catch (Exception e)
+      {
+        op.Fail($"Failed to start scan: {e.ToString()}");
+      }
     });
-
-    return _scanOperation;
   }
 
 
@@ -333,25 +341,47 @@ public partial class Bluetooth : Node
     throw new NotImplementedException();
   }
 
+  /// <summary>
+  /// Stop scanning for BLE devices. This will instruct the adapter to stop scanning for devices.
+  /// This is idempotent (calling this when not scanning does nothing).
+  /// This will cause an ongoing scan Operation to complete with no error.
+  /// </summary>
+  public async Task StopScanAsync()
+  {
+    if (_adapter == null)
+    {
+      throw new InvalidOperationException("Cannot stop discovery: adapter not initialized.");
+    }
+
+    if (!_adapter.IsScanning)
+    {
+      return;
+    }
+
+    // Do not emit the ScanStopped signal here, it is emitted by StartScan.
+
+    await _adapter.StopScanningForDevicesAsync();
+  }
+
 
   /// <summary>
   /// Stop scanning for BLE devices. This is idempotent (calling this when not scanning does nothing).
   /// This will cause an ongoing scan Operation to complete with no error.
   /// </summary>
-  public void StopScan()
+  public BLEOperation StopScan()
   {
-    if (_adapter == null)
+    return BLEOperation.Create(async (op) =>
     {
-      GD.PushError("Bluetooth: Cannot stop discovery: adapter not initialized.");
-      return;
-    }
-
-    new Task(async () =>
-    {
-      await _adapter.StopScanningForDevicesAsync();
-    }).Start();
-    
-    /// No signal emitted here, the ScanStarted thread will emit it when it stops.
+      try
+      {
+        await StopScanAsync();
+        op.Succeed();
+      }
+      catch (Exception e)
+      {
+        op.Fail($"Failed to stop scan: {e.ToString()}");
+      }
+    });
   }
 
   public bool IsScanning()

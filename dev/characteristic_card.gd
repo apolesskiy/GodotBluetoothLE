@@ -92,6 +92,14 @@ func _on_write_button_pressed():
 
 func _on_notify_toggle():
   if notify_button.button_pressed:
-    device.StartNotify(handle)
+    var op = device.EnableNotify(handle)
+    op.Error.connect(func (_op, _err):
+      notify_button.set_pressed_no_signal(false)
+    )
+    op.Start()
   else:
-    device.StopNotify(handle)
+    var op = device.DisableNotify(handle)
+    op.Error.connect(func (_op, _err):
+      notify_button.set_pressed_no_signal(true)
+    )
+    op.Start()

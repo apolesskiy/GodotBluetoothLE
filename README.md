@@ -6,7 +6,7 @@ Bluetooth GATT interface for Godot.
 
 1. Install `addons/godot-bluetooth-le` to your `addons` folder. ([GodotEnv](https://github.com/chickensoft-games/GodotEnv) is recommended if pulling directly from GitHub).
 
-1. Add the following to your `.csproj`:
+2. Add the following to your `.csproj`:
 ```xml
 <PropertyGroup>
     <!-- Set target frameworks so Plugin.BLE pulls in the right platform-specific implementation. -->
@@ -23,9 +23,9 @@ Bluetooth GATT interface for Godot.
   </ItemGroup>
 ```
 
-1. Build the project.
+3. Build the project.
 
-1. Add `Bluetooth` as an autoload in project settings.
+4. Add `Bluetooth` as an autoload in project settings.
 
 ## Usage
 
@@ -37,7 +37,7 @@ func _ready() -> void:
   Bluetooth.DeviceDetected.connect(on_device_detected)
 
 func scan() -> void:
-  Bluetooth.StartScan()
+  Bluetooth.Scan().Start()
 
 func on_device_detected(device) -> void:
   print("Device detected: (" + device.Address + ") " + device.Name)
@@ -50,7 +50,7 @@ var my_device : BluetoothDevice
 
 func connect() -> void:
   my_device.Connected.connect(on_connected)
-  my_device.StartConnect()
+  my_device.Connect().Start()
 
 func on_connected() -> void:
   service_handles = my_device.GetServicesArray()
@@ -69,10 +69,32 @@ chara_handle.CharacteristicUUID = characteristic_uuid
 
 var data = "hello"
 var bytes = value.to_utf8_buffer()
-device.StartWrite(handle, bytes)
+var write_operation = device.Write(handle, bytes)
+write_operation.Done.connect(func(op):
+  if op.Success:
+    print("Write result: ", op.Result)
+)
+write_operation.Start()
 ```
 
-### Read from Characteristic
+### Read from a Characteristic
+```gdscript
+my_chara_handle : BLEGattHandle
+
+# ... discover or set your service and characteristic IDs
+
+func read_my_chara():
+  var read_op = my_device.Read(my_chara_handle)
+  read_op.Done.connect(func(op):
+    if op.Success:
+      print("Received bytes:", op.Result)
+  )
+  read_op.Start()
+
+```
+
+
+### Listen for Characteristic Changes
 ```gdscript
 my_chara_handle : BLEGattHandle
 
@@ -83,7 +105,7 @@ my_device.GetSubscription(my_chara_handle).OnValueChanged.connect(my_chara_new_v
 ...
 
 func read_my_chara():
-  my_device.StartRead(my_chara_handle)
+  my_device.Read(my_chara_handle).Start()
 
 func my_chara_new_value():
   var bytes = my_device.GetValue(my_chara_handle)
@@ -99,7 +121,7 @@ my_chara_handle : BLEGattHandle
 
 my_device.GetSubscription(my_chara_handle).OnValueChanged.connect(my_chara_new_value)
 
-my_device.StartNotify(my_chara_handle)
+my_device.EnableNotify(my_chara_handle).Start()
 ...
 
 func my_chara_new_value():
@@ -157,21 +179,19 @@ start of the game for any devices that are already known and connected, respecti
 This also means that while the pairing process itself is not supported by the addon,
  you can still pair your device through the OS. It will show up as connected in-game.
 
-### Concurrency
+### Concurrency and GDScript
 
 It is important to keep in mind that *everything* about Bluetooth is asynchronous. 
-APIs that are not asynchronous in the addon are really just cached for convenience.
+APIs that are not asynchronous in the addon are just cached for convenience.
 
-Signals emitted by the addon are safe to use directly in your game's code. This is
-done via the `SignalForwarder`. This class creates a synchronization context on the main
-thread at startup, and forwards signal emissions through that context. This comes at the cost
-of having to parse incoming data on the main thread. 
+Signals emitted by the addon are safe to use directly in GDScript code. `SignalForwarder` creates a synchronization context on the main
+thread at startup, and forwards signal emissions through that context. This comes at the cost of having to parse incoming data on the main thread. 
 
-If this is not desired, the addon provides a C#-only API that uses async and delegates
-for reads, writes, and notifies. It is up to the user to ensure that their usage of
-this API plays nice with the main thread.
+If this is not desired, the addon provides a C#-only API that uses async and delegates for reads, writes, and notifies. It is up to the user to ensure that their usage of this API plays nice with the main thread.
 
-### Why all the .csproj stuff?
+In GDScript, `BLEOperation` allows user code to monitor async operations and handle errors. This also wraps C# exceptions, since async C# exceptions tend to crash Godot.
+
+### Handling .csproj
 
 The addon wraps [Plugin.BLE](https://github.com/dotnet-bluetooth-le/dotnet-bluetooth-le) to 
 provide cross-platform Bluetooth LE support. Since Plugin.BLE doesn't support Linux, the
@@ -186,3 +206,5 @@ is interpreted by the build as "multiplatform". In Plugin.BLE's case, that means
 "no platform" and is unsupported. So, because `TargetFramework` is global, we
 need to explicitly set it, based on Godot's target platform, to something
 Plugin.BLE supports.
+
+Unfortunately, Godot will attempt to overwrite these changes whenever it opens the project, so the main `.csproj` will need to be reverted every time this happens.
